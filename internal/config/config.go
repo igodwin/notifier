@@ -39,6 +39,9 @@ type SMTPConfig struct {
 	Password string `mapstructure:"password"`
 }
 
+type StdoutConfig struct {
+}
+
 func LoadConfig(configFile string) (*Config, error) {
 	viper.SetConfigFile(configFile)
 	if err := viper.ReadInConfig(); err != nil {

@@ -22,6 +22,8 @@ func NewNotifier(mode string, config interface{}) (Notifier, error) {
 		return NewNtfyNotifier(config.(NtfyConfig))
 	case "smtp":
 		return NewSMTPNotifier(config.(SMTPConfig))
+	case "stdout":
+		return NewStdoutNotifier(config.(StdoutConfig))
 	// case "slack":
 	// 	return NewSlackNotifier(config.(SlackConfig))
 	// Other notification modes can be added here
