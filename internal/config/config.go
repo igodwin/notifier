@@ -21,8 +21,8 @@ type NtfyConfig struct {
 	Token    string `mapstructure:"token"`
 }
 
-func (c *NtfyConfig) Validate() error {
-	if c.Token != "" && (c.Username != "" || c.Password != "") {
+func (nc *NtfyConfig) Validate() error {
+	if nc.Token != "" && (nc.Username != "" || nc.Password != "") {
 		return errors.New("either Token or Username/Password should be specified, not both")
 	}
 	return nil
