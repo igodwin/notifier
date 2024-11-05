@@ -15,7 +15,6 @@ type Notification struct {
 	Message   string
 }
 
-// NewNotifier could be a factory function that selects the notifier implementation based on configuration or parameters
 func NewNotifier(mode string, config interface{}) (Notifier, error) {
 	switch mode {
 	case "ntfy":

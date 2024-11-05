@@ -2,11 +2,9 @@ package notifier_test
 
 import (
 	"bytes"
-	"os"
-	"strings"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"os"
 
 	"github.com/igodwin/notifier/internal/config"
 	"github.com/igodwin/notifier/internal/notifier"
@@ -44,13 +42,13 @@ var _ = Describe("StdoutNotifier", func() {
 		Expect(buffer.String()).To(ContainSubstring(expectedNotificationMessage))
 	})
 
-	It("should not output anything if message is empty", func() {
+	It("should output new line if message is empty", func() {
 		testNotification := notifier.Notification{}
 		Expect(stdoutNotifier.Send(testNotification)).To(Succeed())
 		resetStdout()
 
 		_, _ = buffer.ReadFrom(reader)
-		Expect(strings.TrimSpace(buffer.String())).To(BeEmpty())
+		Expect(buffer.String()).To(Equal("\n"))
 	})
 })
 

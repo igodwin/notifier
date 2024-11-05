@@ -25,29 +25,24 @@ func NewNtfyNotifier(config config.NtfyConfig) (*NtfyNotifier, error) {
 	return &NtfyNotifier{config: config}, nil
 }
 
-// Send sends a notification via Ntfy
 func (n *NtfyNotifier) Send(notification Notification) error {
 	url := fmt.Sprintf("%s/%s", n.config.URL, n.config.Topic)
 
-	// Construct the Ntfy message
 	message := NtfyMessage{
 		Topic:   n.config.Topic,
 		Message: notification.Message,
 	}
 
-	// Serialize message to JSON
 	payload, err := json.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("failed to encode message: %v", err)
 	}
 
-	// Create HTTP request
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}
 
-	// Set headers for authentication
 	req.Header.Set("Content-Type", "application/json")
 	if n.config.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+n.config.Token)
@@ -55,7 +50,6 @@ func (n *NtfyNotifier) Send(notification Notification) error {
 		req.SetBasicAuth(n.config.Username, n.config.Password)
 	}
 
-	// Send the HTTP request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
