@@ -10,24 +10,38 @@ import (
 
 // Factory creates and manages notifier instances
 type Factory struct {
-	notifiers map[domain.NotificationType]domain.Notifier
+	// Map of "type:account" -> notifier instance
+	notifiers map[string]domain.Notifier
 	mu        sync.RWMutex
 }
 
 // NewFactory creates a new notifier factory
 func NewFactory() *Factory {
 	return &Factory{
-		notifiers: make(map[domain.NotificationType]domain.Notifier),
+		notifiers: make(map[string]domain.Notifier),
 	}
 }
 
-// Create creates a notifier for the given type
-func (f *Factory) Create(notificationType domain.NotificationType) (domain.Notifier, error) {
+// makeKey creates a compound key from notification type and account
+func makeKey(notificationType domain.NotificationType, account string) string {
+	if account == "" {
+		// For backward compatibility, if account is empty, just use the type
+		return string(notificationType)
+	}
+	return fmt.Sprintf("%s:%s", notificationType, account)
+}
+
+// Create creates a notifier for the given type and account
+func (f *Factory) Create(notificationType domain.NotificationType, account string) (domain.Notifier, error) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	notifier, exists := f.notifiers[notificationType]
+	key := makeKey(notificationType, account)
+	notifier, exists := f.notifiers[key]
 	if !exists {
+		if account != "" {
+			return nil, fmt.Errorf("unsupported notification type: %s with account: %s", notificationType, account)
+		}
 		return nil, fmt.Errorf("unsupported notification type: %s", notificationType)
 	}
 
@@ -35,29 +49,63 @@ func (f *Factory) Create(notificationType domain.NotificationType) (domain.Notif
 }
 
 // RegisterNotifier registers a custom notifier implementation
-func (f *Factory) RegisterNotifier(notificationType domain.NotificationType, notifier domain.Notifier) error {
+func (f *Factory) RegisterNotifier(notificationType domain.NotificationType, account string, notifier domain.Notifier) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if _, exists := f.notifiers[notificationType]; exists {
+	key := makeKey(notificationType, account)
+	if _, exists := f.notifiers[key]; exists {
+		if account != "" {
+			return fmt.Errorf("notifier already registered for type: %s with account: %s", notificationType, account)
+		}
 		return fmt.Errorf("notifier already registered for type: %s", notificationType)
 	}
 
-	f.notifiers[notificationType] = notifier
+	f.notifiers[key] = notifier
 	return nil
 }
 
-// SupportedTypes returns all supported notification types
+// SupportedTypes returns all supported notification types (unique types only)
 func (f *Factory) SupportedTypes() []domain.NotificationType {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
-	types := make([]domain.NotificationType, 0, len(f.notifiers))
-	for t := range f.notifiers {
+	typeMap := make(map[domain.NotificationType]bool)
+	for key := range f.notifiers {
+		// Extract the type from the key (type:account)
+		var notifType domain.NotificationType
+		if n, err := fmt.Sscanf(key, "%s:", &notifType); err == nil && n > 0 {
+			typeMap[notifType] = true
+		} else {
+			// Backward compatibility: key might just be the type
+			typeMap[domain.NotificationType(key)] = true
+		}
+	}
+
+	types := make([]domain.NotificationType, 0, len(typeMap))
+	for t := range typeMap {
 		types = append(types, t)
 	}
 
 	return types
+}
+
+// GetAccounts returns all registered accounts for a given notification type
+func (f *Factory) GetAccounts(notificationType domain.NotificationType) []string {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	accounts := []string{}
+	prefix := string(notificationType) + ":"
+
+	for key := range f.notifiers {
+		if len(key) > len(prefix) && key[:len(prefix)] == prefix {
+			account := key[len(prefix):]
+			accounts = append(accounts, account)
+		}
+	}
+
+	return accounts
 }
 
 // BaseNotifier provides common functionality for all notifiers

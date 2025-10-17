@@ -32,6 +32,9 @@ type NtfyConfig struct {
 
 	// InsecureSkipVerify skips TLS verification (for self-hosted servers with self-signed certs)
 	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify"`
+
+	// Default marks this instance as default
+	Default bool `mapstructure:"default"`
 }
 
 // NtfyNotifier sends notifications via ntfy.sh

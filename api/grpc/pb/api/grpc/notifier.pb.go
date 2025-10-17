@@ -201,18 +201,19 @@ type Notification struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	Type          NotificationType       `protobuf:"varint,2,opt,name=type,proto3,enum=notifier.v1.NotificationType" json:"type,omitempty"`
-	Priority      Priority               `protobuf:"varint,3,opt,name=priority,proto3,enum=notifier.v1.Priority" json:"priority,omitempty"`
-	Status        NotificationStatus     `protobuf:"varint,4,opt,name=status,proto3,enum=notifier.v1.NotificationStatus" json:"status,omitempty"`
-	Subject       string                 `protobuf:"bytes,5,opt,name=subject,proto3" json:"subject,omitempty"`
-	Body          string                 `protobuf:"bytes,6,opt,name=body,proto3" json:"body,omitempty"`
-	Recipients    []string               `protobuf:"bytes,7,rep,name=recipients,proto3" json:"recipients,omitempty"`
-	Metadata      map[string]string      `protobuf:"bytes,8,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	ScheduledFor  *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
-	SentAt        *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=sent_at,json=sentAt,proto3" json:"sent_at,omitempty"`
-	RetryCount    int32                  `protobuf:"varint,12,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
-	MaxRetries    int32                  `protobuf:"varint,13,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
-	LastError     string                 `protobuf:"bytes,14,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
+	Account       string                 `protobuf:"bytes,3,opt,name=account,proto3" json:"account,omitempty"` // Optional account name for multi-account configs
+	Priority      Priority               `protobuf:"varint,4,opt,name=priority,proto3,enum=notifier.v1.Priority" json:"priority,omitempty"`
+	Status        NotificationStatus     `protobuf:"varint,5,opt,name=status,proto3,enum=notifier.v1.NotificationStatus" json:"status,omitempty"`
+	Subject       string                 `protobuf:"bytes,6,opt,name=subject,proto3" json:"subject,omitempty"`
+	Body          string                 `protobuf:"bytes,7,opt,name=body,proto3" json:"body,omitempty"`
+	Recipients    []string               `protobuf:"bytes,8,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,9,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ScheduledFor  *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
+	SentAt        *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=sent_at,json=sentAt,proto3" json:"sent_at,omitempty"`
+	RetryCount    int32                  `protobuf:"varint,13,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"`
+	MaxRetries    int32                  `protobuf:"varint,14,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
+	LastError     string                 `protobuf:"bytes,15,opt,name=last_error,json=lastError,proto3" json:"last_error,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -259,6 +260,13 @@ func (x *Notification) GetType() NotificationType {
 		return x.Type
 	}
 	return NotificationType_NOTIFICATION_TYPE_UNSPECIFIED
+}
+
+func (x *Notification) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
 }
 
 func (x *Notification) GetPriority() Priority {
@@ -434,13 +442,14 @@ func (x *NotificationResult) GetProviderResponse() map[string]string {
 type SendNotificationRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Type          NotificationType       `protobuf:"varint,1,opt,name=type,proto3,enum=notifier.v1.NotificationType" json:"type,omitempty"`
-	Priority      Priority               `protobuf:"varint,2,opt,name=priority,proto3,enum=notifier.v1.Priority" json:"priority,omitempty"`
-	Subject       string                 `protobuf:"bytes,3,opt,name=subject,proto3" json:"subject,omitempty"`
-	Body          string                 `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
-	Recipients    []string               `protobuf:"bytes,5,rep,name=recipients,proto3" json:"recipients,omitempty"`
-	Metadata      map[string]string      `protobuf:"bytes,6,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	ScheduledFor  *timestamppb.Timestamp `protobuf:"bytes,7,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
-	MaxRetries    int32                  `protobuf:"varint,8,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
+	Account       string                 `protobuf:"bytes,2,opt,name=account,proto3" json:"account,omitempty"` // Optional account name for multi-account configs
+	Priority      Priority               `protobuf:"varint,3,opt,name=priority,proto3,enum=notifier.v1.Priority" json:"priority,omitempty"`
+	Subject       string                 `protobuf:"bytes,4,opt,name=subject,proto3" json:"subject,omitempty"`
+	Body          string                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`
+	Recipients    []string               `protobuf:"bytes,6,rep,name=recipients,proto3" json:"recipients,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,7,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	ScheduledFor  *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=scheduled_for,json=scheduledFor,proto3" json:"scheduled_for,omitempty"`
+	MaxRetries    int32                  `protobuf:"varint,9,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -480,6 +489,13 @@ func (x *SendNotificationRequest) GetType() NotificationType {
 		return x.Type
 	}
 	return NotificationType_NOTIFICATION_TYPE_UNSPECIFIED
+}
+
+func (x *SendNotificationRequest) GetAccount() string {
+	if x != nil {
+		return x.Account
+	}
+	return ""
 }
 
 func (x *SendNotificationRequest) GetPriority() Priority {
@@ -1375,29 +1391,30 @@ var File_api_grpc_notifier_proto protoreflect.FileDescriptor
 
 const file_api_grpc_notifier_proto_rawDesc = "" +
 	"\n" +
-	"\x17api/grpc/notifier.proto\x12\vnotifier.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9f\x05\n" +
+	"\x17api/grpc/notifier.proto\x12\vnotifier.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb9\x05\n" +
 	"\fNotification\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x121\n" +
-	"\x04type\x18\x02 \x01(\x0e2\x1d.notifier.v1.NotificationTypeR\x04type\x121\n" +
-	"\bpriority\x18\x03 \x01(\x0e2\x15.notifier.v1.PriorityR\bpriority\x127\n" +
-	"\x06status\x18\x04 \x01(\x0e2\x1f.notifier.v1.NotificationStatusR\x06status\x12\x18\n" +
-	"\asubject\x18\x05 \x01(\tR\asubject\x12\x12\n" +
-	"\x04body\x18\x06 \x01(\tR\x04body\x12\x1e\n" +
+	"\x04type\x18\x02 \x01(\x0e2\x1d.notifier.v1.NotificationTypeR\x04type\x12\x18\n" +
+	"\aaccount\x18\x03 \x01(\tR\aaccount\x121\n" +
+	"\bpriority\x18\x04 \x01(\x0e2\x15.notifier.v1.PriorityR\bpriority\x127\n" +
+	"\x06status\x18\x05 \x01(\x0e2\x1f.notifier.v1.NotificationStatusR\x06status\x12\x18\n" +
+	"\asubject\x18\x06 \x01(\tR\asubject\x12\x12\n" +
+	"\x04body\x18\a \x01(\tR\x04body\x12\x1e\n" +
 	"\n" +
-	"recipients\x18\a \x03(\tR\n" +
+	"recipients\x18\b \x03(\tR\n" +
 	"recipients\x12C\n" +
-	"\bmetadata\x18\b \x03(\v2'.notifier.v1.Notification.MetadataEntryR\bmetadata\x129\n" +
+	"\bmetadata\x18\t \x03(\v2'.notifier.v1.Notification.MetadataEntryR\bmetadata\x129\n" +
 	"\n" +
-	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12?\n" +
-	"\rscheduled_for\x18\n" +
-	" \x01(\v2\x1a.google.protobuf.TimestampR\fscheduledFor\x123\n" +
-	"\asent_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\x06sentAt\x12\x1f\n" +
-	"\vretry_count\x18\f \x01(\x05R\n" +
+	"created_at\x18\n" +
+	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12?\n" +
+	"\rscheduled_for\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\fscheduledFor\x123\n" +
+	"\asent_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\x06sentAt\x12\x1f\n" +
+	"\vretry_count\x18\r \x01(\x05R\n" +
 	"retryCount\x12\x1f\n" +
-	"\vmax_retries\x18\r \x01(\x05R\n" +
+	"\vmax_retries\x18\x0e \x01(\x05R\n" +
 	"maxRetries\x12\x1d\n" +
 	"\n" +
-	"last_error\x18\x0e \x01(\tR\tlastError\x1a;\n" +
+	"last_error\x18\x0f \x01(\tR\tlastError\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe5\x02\n" +
@@ -1410,18 +1427,19 @@ const file_api_grpc_notifier_proto_rawDesc = "" +
 	"\x11provider_response\x18\x06 \x03(\v25.notifier.v1.NotificationResult.ProviderResponseEntryR\x10providerResponse\x1aC\n" +
 	"\x15ProviderResponseEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbc\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd6\x03\n" +
 	"\x17SendNotificationRequest\x121\n" +
-	"\x04type\x18\x01 \x01(\x0e2\x1d.notifier.v1.NotificationTypeR\x04type\x121\n" +
-	"\bpriority\x18\x02 \x01(\x0e2\x15.notifier.v1.PriorityR\bpriority\x12\x18\n" +
-	"\asubject\x18\x03 \x01(\tR\asubject\x12\x12\n" +
-	"\x04body\x18\x04 \x01(\tR\x04body\x12\x1e\n" +
+	"\x04type\x18\x01 \x01(\x0e2\x1d.notifier.v1.NotificationTypeR\x04type\x12\x18\n" +
+	"\aaccount\x18\x02 \x01(\tR\aaccount\x121\n" +
+	"\bpriority\x18\x03 \x01(\x0e2\x15.notifier.v1.PriorityR\bpriority\x12\x18\n" +
+	"\asubject\x18\x04 \x01(\tR\asubject\x12\x12\n" +
+	"\x04body\x18\x05 \x01(\tR\x04body\x12\x1e\n" +
 	"\n" +
-	"recipients\x18\x05 \x03(\tR\n" +
+	"recipients\x18\x06 \x03(\tR\n" +
 	"recipients\x12N\n" +
-	"\bmetadata\x18\x06 \x03(\v22.notifier.v1.SendNotificationRequest.MetadataEntryR\bmetadata\x12?\n" +
-	"\rscheduled_for\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\fscheduledFor\x12\x1f\n" +
-	"\vmax_retries\x18\b \x01(\x05R\n" +
+	"\bmetadata\x18\a \x03(\v22.notifier.v1.SendNotificationRequest.MetadataEntryR\bmetadata\x12?\n" +
+	"\rscheduled_for\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\fscheduledFor\x12\x1f\n" +
+	"\vmax_retries\x18\t \x01(\x05R\n" +
 	"maxRetries\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +

@@ -11,6 +11,7 @@ import (
 // SendNotificationRequest is the REST API request for sending a notification
 type SendNotificationRequest struct {
 	Type         string                 `json:"type"`
+	Account      string                 `json:"account,omitempty"` // Optional account name for multi-account configs
 	Priority     int                    `json:"priority,omitempty"`
 	Subject      string                 `json:"subject"`
 	Body         string                 `json:"body"`
@@ -47,6 +48,7 @@ func (r *SendNotificationRequest) ToNotification() *domain.Notification {
 	return &domain.Notification{
 		ID:           uuid.New().String(),
 		Type:         domain.NotificationType(r.Type),
+		Account:      r.Account,
 		Priority:     domain.Priority(r.Priority),
 		Status:       domain.StatusPending,
 		Subject:      r.Subject,
@@ -79,6 +81,7 @@ type SendBatchNotificationsResponse struct {
 type Notification struct {
 	ID           string                 `json:"id"`
 	Type         string                 `json:"type"`
+	Account      string                 `json:"account,omitempty"`
 	Priority     int                    `json:"priority"`
 	Status       string                 `json:"status"`
 	Subject      string                 `json:"subject"`
@@ -98,6 +101,7 @@ func NotificationFromDomain(n *domain.Notification) Notification {
 	return Notification{
 		ID:           n.ID,
 		Type:         string(n.Type),
+		Account:      n.Account,
 		Priority:     int(n.Priority),
 		Status:       string(n.Status),
 		Subject:      n.Subject,

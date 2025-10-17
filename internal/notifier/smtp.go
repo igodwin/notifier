@@ -18,6 +18,7 @@ type SMTPConfig struct {
 	Password string `mapstructure:"password"`
 	From     string `mapstructure:"from"`
 	UseTLS   bool   `mapstructure:"use_tls"`
+	Default  bool   `mapstructure:"default"` // Mark this instance as default
 }
 
 // SMTPNotifier sends notifications via email using SMTP

@@ -34,44 +34,63 @@ notifiers:
   # Enable stdout notifier (useful for development/debugging)
   stdout: true
 
-  # SMTP email configuration
+  # SMTP email configuration (supports multiple accounts)
   smtp:
-    host: "smtp.gmail.com"
-    port: 587
-    username: "your-email@gmail.com"
-    password: "your-app-password"
-    from: "notifications@yourservice.com"
-    use_tls: true
+    # Personal email account (marked as default)
+    personal:
+      host: "smtp.gmail.com"
+      port: 587
+      username: "your-personal@gmail.com"
+      password: "your-app-password"
+      from: "your-personal@gmail.com"
+      use_tls: true
+      default: true  # This account will be used if no account is specified in the API request
 
-  # Slack configuration
+    # Work email account
+    # work:
+    #   host: "smtp.company.com"
+    #   port: 587
+    #   username: "you@company.com"
+    #   password: "your-work-password"
+    #   from: "notifications@company.com"
+    #   use_tls: true
+    #   default: false
+
+  # Slack configuration (supports multiple workspaces/webhooks)
   slack:
-    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
-    # token: "xoxb-your-bot-token" # Alternative to webhook
-    # channel: "#notifications" # Default channel
-    username: "Notifier Bot"
-    icon_emoji: ":bell:"
-    # Channel-specific webhooks
-    # webhooks:
-    #   "#alerts": "https://hooks.slack.com/services/ALERTS/WEBHOOK"
-    #   "#monitoring": "https://hooks.slack.com/services/MONITORING/WEBHOOK"
+    # Main workspace (marked as default)
+    main:
+      webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+      username: "Notifier Bot"
+      icon_emoji: ":bell:"
+      default: true  # This workspace will be used if no account is specified
 
-  # Ntfy configuration
+    # Additional workspace example
+    # team-a:
+    #   webhook_url: "https://hooks.slack.com/services/TEAM-A/WEBHOOK/URL"
+    #   username: "Team A Bot"
+    #   icon_emoji: ":rocket:"
+    #   # Channel-specific webhooks within this workspace
+    #   webhooks:
+    #     "#alerts": "https://hooks.slack.com/services/ALERTS/WEBHOOK"
+    #     "#monitoring": "https://hooks.slack.com/services/MONITORING/WEBHOOK"
+
+  # Ntfy configuration (supports multiple servers)
   ntfy:
-    server_url: "https://ntfy.sh"
+    # Public ntfy.sh server (marked as default)
+    public:
+      server_url: "https://ntfy.sh"
+      # token: "tk_your_access_token"  # Token-based auth (recommended)
+      # default_topic: "notifications"
+      default: true  # This server will be used if no account is specified
 
-    # Token-based authentication (recommended for ntfy.sh)
-    # Supports both access tokens (tk_...) and publish tokens
-    # token: "tk_your_access_token"
-
-    # Basic authentication (alternative to token)
-    # username: "your-username"
-    # password: "your-password"
-
-    # Default topic if recipient not specified
-    # default_topic: "default-notifications"
-
-    # Skip TLS verification (for self-hosted servers with self-signed certs)
-    # insecure_skip_verify: false
+    # Private ntfy server example
+    # private:
+    #   server_url: "https://ntfy.mycompany.com"
+    #   username: "your-username"
+    #   password: "your-password"
+    #   default_topic: "company-notifications"
+    #   insecure_skip_verify: false  # Set to true for self-signed certs
 
 logging:
   level: "info" # Options: debug, info, warn, error

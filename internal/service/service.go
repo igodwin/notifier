@@ -9,29 +9,36 @@ import (
 	"github.com/igodwin/notifier/internal/domain"
 )
 
+// AccountResolver is an interface for resolving default accounts
+type AccountResolver interface {
+	GetDefaultAccount(notifierType domain.NotificationType) string
+}
+
 // NotificationService implements the domain.NotificationService interface
 type NotificationService struct {
-	factory       domain.NotifierFactory
-	queue         domain.Queue
-	notifications map[string]*domain.Notification
-	mu            sync.RWMutex
-	workerCount   int
-	stopChan      chan struct{}
-	wg            sync.WaitGroup
+	factory         domain.NotifierFactory
+	queue           domain.Queue
+	accountResolver AccountResolver
+	notifications   map[string]*domain.Notification
+	mu              sync.RWMutex
+	workerCount     int
+	stopChan        chan struct{}
+	wg              sync.WaitGroup
 }
 
 // NewNotificationService creates a new notification service
-func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, workerCount int) *NotificationService {
+func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, workerCount int, accountResolver AccountResolver) *NotificationService {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
 
 	return &NotificationService{
-		factory:       factory,
-		queue:         queue,
-		notifications: make(map[string]*domain.Notification),
-		workerCount:   workerCount,
-		stopChan:      make(chan struct{}),
+		factory:         factory,
+		queue:           queue,
+		accountResolver: accountResolver,
+		notifications:   make(map[string]*domain.Notification),
+		workerCount:     workerCount,
+		stopChan:        make(chan struct{}),
 	}
 }
 
@@ -90,8 +97,14 @@ func (s *NotificationService) worker(ctx context.Context, id int) {
 func (s *NotificationService) processNotification(ctx context.Context, msg *domain.QueueMessage) {
 	notification := msg.Notification
 
+	// Resolve account if not specified
+	account := notification.Account
+	if account == "" && s.accountResolver != nil {
+		account = s.accountResolver.GetDefaultAccount(notification.Type)
+	}
+
 	// Get the appropriate notifier
-	notifier, err := s.factory.Create(notification.Type)
+	notifier, err := s.factory.Create(notification.Type, account)
 	if err != nil {
 		notification.Status = domain.StatusFailed
 		notification.LastError = fmt.Sprintf("failed to create notifier: %v", err)

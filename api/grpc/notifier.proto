@@ -66,18 +66,19 @@ enum NotificationStatus {
 message Notification {
   string id = 1;
   NotificationType type = 2;
-  Priority priority = 3;
-  NotificationStatus status = 4;
-  string subject = 5;
-  string body = 6;
-  repeated string recipients = 7;
-  map<string, string> metadata = 8;
-  google.protobuf.Timestamp created_at = 9;
-  google.protobuf.Timestamp scheduled_for = 10;
-  google.protobuf.Timestamp sent_at = 11;
-  int32 retry_count = 12;
-  int32 max_retries = 13;
-  string last_error = 14;
+  string account = 3; // Optional account name for multi-account configs
+  Priority priority = 4;
+  NotificationStatus status = 5;
+  string subject = 6;
+  string body = 7;
+  repeated string recipients = 8;
+  map<string, string> metadata = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp scheduled_for = 11;
+  google.protobuf.Timestamp sent_at = 12;
+  int32 retry_count = 13;
+  int32 max_retries = 14;
+  string last_error = 15;
 }
 
 // NotificationResult represents the outcome of sending a notification
@@ -93,13 +94,14 @@ message NotificationResult {
 // SendNotificationRequest sends a single notification
 message SendNotificationRequest {
   NotificationType type = 1;
-  Priority priority = 2;
-  string subject = 3;
-  string body = 4;
-  repeated string recipients = 5;
-  map<string, string> metadata = 6;
-  google.protobuf.Timestamp scheduled_for = 7;
-  int32 max_retries = 8;
+  string account = 2; // Optional account name for multi-account configs
+  Priority priority = 3;
+  string subject = 4;
+  string body = 5;
+  repeated string recipients = 6;
+  map<string, string> metadata = 7;
+  google.protobuf.Timestamp scheduled_for = 8;
+  int32 max_retries = 9;
 }
 
 // SendNotificationResponse returns the result of sending a notification

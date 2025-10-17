@@ -29,10 +29,10 @@ type ServerConfig struct {
 
 // NotifiersConfig contains configuration for all notifier types
 type NotifiersConfig struct {
-	SMTP   *notifier.SMTPConfig  `mapstructure:"smtp"`
-	Slack  *notifier.SlackConfig `mapstructure:"slack"`
-	Ntfy   *notifier.NtfyConfig  `mapstructure:"ntfy"`
-	Stdout bool                  `mapstructure:"stdout"` // Enable stdout notifier
+	SMTP   map[string]*notifier.SMTPConfig  `mapstructure:"smtp"`
+	Slack  map[string]*notifier.SlackConfig `mapstructure:"slack"`
+	Ntfy   map[string]*notifier.NtfyConfig  `mapstructure:"ntfy"`
+	Stdout bool                             `mapstructure:"stdout"` // Enable stdout notifier
 }
 
 // LoggingConfig contains logging configuration
@@ -185,9 +185,9 @@ func (c *Config) Validate() error {
 // HasAnyNotifier checks if at least one notifier is configured
 func (c *Config) HasAnyNotifier() bool {
 	return c.Notifiers.Stdout ||
-		c.Notifiers.SMTP != nil ||
-		c.Notifiers.Slack != nil ||
-		c.Notifiers.Ntfy != nil
+		len(c.Notifiers.SMTP) > 0 ||
+		len(c.Notifiers.Slack) > 0 ||
+		len(c.Notifiers.Ntfy) > 0
 }
 
 // GetEnabledNotifiers returns a list of enabled notifier types
@@ -197,15 +197,52 @@ func (c *Config) GetEnabledNotifiers() []domain.NotificationType {
 	if c.Notifiers.Stdout {
 		enabled = append(enabled, domain.TypeStdout)
 	}
-	if c.Notifiers.SMTP != nil {
+	if len(c.Notifiers.SMTP) > 0 {
 		enabled = append(enabled, domain.TypeEmail)
 	}
-	if c.Notifiers.Slack != nil {
+	if len(c.Notifiers.Slack) > 0 {
 		enabled = append(enabled, domain.TypeSlack)
 	}
-	if c.Notifiers.Ntfy != nil {
+	if len(c.Notifiers.Ntfy) > 0 {
 		enabled = append(enabled, domain.TypeNtfy)
 	}
 
 	return enabled
+}
+
+// GetDefaultAccount returns the default account name for a notifier type, or the first account if no default is set
+func (c *Config) GetDefaultAccount(notifierType domain.NotificationType) string {
+	switch notifierType {
+	case domain.TypeEmail:
+		for name, cfg := range c.Notifiers.SMTP {
+			if cfg.Default {
+				return name
+			}
+		}
+		// Return first account if no default is set
+		for name := range c.Notifiers.SMTP {
+			return name
+		}
+	case domain.TypeSlack:
+		for name, cfg := range c.Notifiers.Slack {
+			if cfg.Default {
+				return name
+			}
+		}
+		// Return first account if no default is set
+		for name := range c.Notifiers.Slack {
+			return name
+		}
+	case domain.TypeNtfy:
+		for name, cfg := range c.Notifiers.Ntfy {
+			if cfg.Default {
+				return name
+			}
+		}
+		// Return first account if no default is set
+		for name := range c.Notifiers.Ntfy {
+			return name
+		}
+	}
+	return ""
 }

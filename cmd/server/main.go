@@ -69,8 +69,8 @@ func main() {
 
 	logger.Infof("Supported notification types: %v", factory.SupportedTypes())
 
-	// Create notification service
-	svc := service.NewNotificationService(factory, q, cfg.Queue.WorkerCount)
+	// Create notification service (pass config as account resolver)
+	svc := service.NewNotificationService(factory, q, cfg.Queue.WorkerCount, cfg)
 
 	// Start workers
 	if err := svc.Start(ctx); err != nil {
@@ -132,45 +132,60 @@ func main() {
 func registerNotifiers(cfg *config.Config, factory *notifier.Factory, logger *logging.Logger) {
 	if cfg.Notifiers.Stdout {
 		stdoutNotifier := notifier.NewStdoutNotifier()
-		if err := factory.RegisterNotifier(domain.TypeStdout, stdoutNotifier); err != nil {
+		if err := factory.RegisterNotifier(domain.TypeStdout, "", stdoutNotifier); err != nil {
 			logger.Fatalf("Failed to register stdout notifier: %v", err)
 		}
 		logger.Info("Registered stdout notifier")
 	}
 
-	if cfg.Notifiers.SMTP != nil {
-		smtpNotifier, err := notifier.NewSMTPNotifier(cfg.Notifiers.SMTP)
+	// Register SMTP notifiers (now supports multiple accounts)
+	for accountName, smtpConfig := range cfg.Notifiers.SMTP {
+		smtpNotifier, err := notifier.NewSMTPNotifier(smtpConfig)
 		if err != nil {
-			logger.Warnf("Failed to create SMTP notifier: %v", err)
+			logger.Warnf("Failed to create SMTP notifier for account '%s': %v", accountName, err)
 		} else {
-			if err := factory.RegisterNotifier(domain.TypeEmail, smtpNotifier); err != nil {
-				logger.Fatalf("Failed to register SMTP notifier: %v", err)
+			if err := factory.RegisterNotifier(domain.TypeEmail, accountName, smtpNotifier); err != nil {
+				logger.Fatalf("Failed to register SMTP notifier for account '%s': %v", accountName, err)
 			}
-			logger.Info("Registered SMTP notifier")
+			defaultStr := ""
+			if smtpConfig.Default {
+				defaultStr = " (default)"
+			}
+			logger.Infof("Registered SMTP notifier for account '%s'%s", accountName, defaultStr)
 		}
 	}
 
-	if cfg.Notifiers.Slack != nil {
-		slackNotifier, err := notifier.NewSlackNotifier(cfg.Notifiers.Slack)
+	// Register Slack notifiers (now supports multiple accounts)
+	for accountName, slackConfig := range cfg.Notifiers.Slack {
+		slackNotifier, err := notifier.NewSlackNotifier(slackConfig)
 		if err != nil {
-			logger.Warnf("Failed to create Slack notifier: %v", err)
+			logger.Warnf("Failed to create Slack notifier for account '%s': %v", accountName, err)
 		} else {
-			if err := factory.RegisterNotifier(domain.TypeSlack, slackNotifier); err != nil {
-				logger.Fatalf("Failed to register Slack notifier: %v", err)
+			if err := factory.RegisterNotifier(domain.TypeSlack, accountName, slackNotifier); err != nil {
+				logger.Fatalf("Failed to register Slack notifier for account '%s': %v", accountName, err)
 			}
-			logger.Info("Registered Slack notifier")
+			defaultStr := ""
+			if slackConfig.Default {
+				defaultStr = " (default)"
+			}
+			logger.Infof("Registered Slack notifier for account '%s'%s", accountName, defaultStr)
 		}
 	}
 
-	if cfg.Notifiers.Ntfy != nil {
-		ntfyNotifier, err := notifier.NewNtfyNotifier(cfg.Notifiers.Ntfy)
+	// Register Ntfy notifiers (now supports multiple accounts)
+	for accountName, ntfyConfig := range cfg.Notifiers.Ntfy {
+		ntfyNotifier, err := notifier.NewNtfyNotifier(ntfyConfig)
 		if err != nil {
-			logger.Warnf("Failed to create Ntfy notifier: %v", err)
+			logger.Warnf("Failed to create Ntfy notifier for account '%s': %v", accountName, err)
 		} else {
-			if err := factory.RegisterNotifier(domain.TypeNtfy, ntfyNotifier); err != nil {
-				logger.Fatalf("Failed to register Ntfy notifier: %v", err)
+			if err := factory.RegisterNotifier(domain.TypeNtfy, accountName, ntfyNotifier); err != nil {
+				logger.Fatalf("Failed to register Ntfy notifier for account '%s': %v", accountName, err)
 			}
-			logger.Info("Registered Ntfy notifier")
+			defaultStr := ""
+			if ntfyConfig.Default {
+				defaultStr = " (default)"
+			}
+			logger.Infof("Registered Ntfy notifier for account '%s'%s", accountName, defaultStr)
 		}
 	}
 }

@@ -21,14 +21,18 @@ type Notifier interface {
 
 // NotifierFactory creates notifier instances based on configuration
 type NotifierFactory interface {
-	// Create creates a notifier for the given type
-	Create(notificationType NotificationType) (Notifier, error)
+	// Create creates a notifier for the given type and account
+	// If account is empty, the default account for the type will be used
+	Create(notificationType NotificationType, account string) (Notifier, error)
 
 	// RegisterNotifier registers a custom notifier implementation
-	RegisterNotifier(notificationType NotificationType, notifier Notifier) error
+	RegisterNotifier(notificationType NotificationType, account string, notifier Notifier) error
 
 	// SupportedTypes returns all supported notification types
 	SupportedTypes() []NotificationType
+
+	// GetAccounts returns all registered accounts for a given notification type
+	GetAccounts(notificationType NotificationType) []string
 }
 
 // NotificationService is the high-level service interface for managing notifications

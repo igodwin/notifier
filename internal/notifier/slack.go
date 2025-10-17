@@ -19,6 +19,7 @@ type SlackConfig struct {
 	Username   string            `mapstructure:"username"`
 	IconEmoji  string            `mapstructure:"icon_emoji"`
 	Webhooks   map[string]string `mapstructure:"webhooks"` // Channel-specific webhooks
+	Default    bool              `mapstructure:"default"`  // Mark this instance as default
 }
 
 // SlackNotifier sends notifications to Slack

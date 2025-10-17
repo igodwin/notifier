@@ -44,6 +44,10 @@ type Notification struct {
 	// Type specifies which notifier should handle this notification
 	Type NotificationType `json:"type"`
 
+	// Account specifies which named account/instance to use for this notifier type (optional)
+	// If not specified, the default account for the notifier type will be used
+	Account string `json:"account,omitempty"`
+
 	// Priority determines urgency and retry behavior
 	Priority Priority `json:"priority"`
 
