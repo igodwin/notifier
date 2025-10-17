@@ -1,0 +1,196 @@
+syntax = "proto3";
+
+package notifier.v1;
+
+option go_package = "github.com/igodwin/notifier/api/grpc/pb";
+
+import "google/protobuf/timestamp.proto";
+
+// NotifierService handles notification operations
+service NotifierService {
+  // SendNotification sends a single notification
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+
+  // SendBatchNotifications sends multiple notifications
+  rpc SendBatchNotifications(SendBatchNotificationsRequest) returns (SendBatchNotificationsResponse);
+
+  // GetNotification retrieves a notification by ID
+  rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
+
+  // ListNotifications retrieves notifications matching a filter
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+
+  // CancelNotification cancels a pending notification
+  rpc CancelNotification(CancelNotificationRequest) returns (CancelNotificationResponse);
+
+  // RetryNotification retries a failed notification
+  rpc RetryNotification(RetryNotificationRequest) returns (RetryNotificationResponse);
+
+  // GetStats returns notification statistics
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+
+  // HealthCheck verifies the service is operational
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// NotificationType defines the channel for notification delivery
+enum NotificationType {
+  NOTIFICATION_TYPE_UNSPECIFIED = 0;
+  NOTIFICATION_TYPE_EMAIL = 1;
+  NOTIFICATION_TYPE_SLACK = 2;
+  NOTIFICATION_TYPE_NTFY = 3;
+  NOTIFICATION_TYPE_STDOUT = 4;
+}
+
+// Priority defines the urgency level
+enum Priority {
+  PRIORITY_UNSPECIFIED = 0;
+  PRIORITY_LOW = 1;
+  PRIORITY_NORMAL = 2;
+  PRIORITY_HIGH = 3;
+  PRIORITY_CRITICAL = 4;
+}
+
+// NotificationStatus represents the state of a notification
+enum NotificationStatus {
+  NOTIFICATION_STATUS_UNSPECIFIED = 0;
+  NOTIFICATION_STATUS_PENDING = 1;
+  NOTIFICATION_STATUS_QUEUED = 2;
+  NOTIFICATION_STATUS_PROCESSING = 3;
+  NOTIFICATION_STATUS_SENT = 4;
+  NOTIFICATION_STATUS_FAILED = 5;
+  NOTIFICATION_STATUS_RETRYING = 6;
+}
+
+// Notification represents a notification message
+message Notification {
+  string id = 1;
+  NotificationType type = 2;
+  Priority priority = 3;
+  NotificationStatus status = 4;
+  string subject = 5;
+  string body = 6;
+  repeated string recipients = 7;
+  map<string, string> metadata = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp scheduled_for = 10;
+  google.protobuf.Timestamp sent_at = 11;
+  int32 retry_count = 12;
+  int32 max_retries = 13;
+  string last_error = 14;
+}
+
+// NotificationResult represents the outcome of sending a notification
+message NotificationResult {
+  string notification_id = 1;
+  bool success = 2;
+  string message = 3;
+  string error = 4;
+  google.protobuf.Timestamp sent_at = 5;
+  map<string, string> provider_response = 6;
+}
+
+// SendNotificationRequest sends a single notification
+message SendNotificationRequest {
+  NotificationType type = 1;
+  Priority priority = 2;
+  string subject = 3;
+  string body = 4;
+  repeated string recipients = 5;
+  map<string, string> metadata = 6;
+  google.protobuf.Timestamp scheduled_for = 7;
+  int32 max_retries = 8;
+}
+
+// SendNotificationResponse returns the result of sending a notification
+message SendNotificationResponse {
+  NotificationResult result = 1;
+}
+
+// SendBatchNotificationsRequest sends multiple notifications
+message SendBatchNotificationsRequest {
+  repeated SendNotificationRequest notifications = 1;
+}
+
+// SendBatchNotificationsResponse returns the results of sending multiple notifications
+message SendBatchNotificationsResponse {
+  repeated NotificationResult results = 1;
+}
+
+// GetNotificationRequest retrieves a notification by ID
+message GetNotificationRequest {
+  string id = 1;
+}
+
+// GetNotificationResponse returns a notification
+message GetNotificationResponse {
+  Notification notification = 1;
+}
+
+// NotificationFilter is used for querying notifications
+message NotificationFilter {
+  repeated string ids = 1;
+  repeated NotificationType types = 2;
+  repeated NotificationStatus statuses = 3;
+  repeated string recipients = 4;
+  google.protobuf.Timestamp created_after = 5;
+  google.protobuf.Timestamp created_before = 6;
+  int32 limit = 7;
+  int32 offset = 8;
+}
+
+// ListNotificationsRequest retrieves notifications matching a filter
+message ListNotificationsRequest {
+  NotificationFilter filter = 1;
+}
+
+// ListNotificationsResponse returns a list of notifications
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+  int64 total = 2;
+}
+
+// CancelNotificationRequest cancels a pending notification
+message CancelNotificationRequest {
+  string id = 1;
+}
+
+// CancelNotificationResponse returns the result of canceling a notification
+message CancelNotificationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// RetryNotificationRequest retries a failed notification
+message RetryNotificationRequest {
+  string id = 1;
+}
+
+// RetryNotificationResponse returns the result of retrying a notification
+message RetryNotificationResponse {
+  NotificationResult result = 1;
+}
+
+// GetStatsRequest requests notification statistics
+message GetStatsRequest {}
+
+// GetStatsResponse returns notification statistics
+message GetStatsResponse {
+  int64 total_sent = 1;
+  int64 total_failed = 2;
+  int64 total_pending = 3;
+  int64 total_queued = 4;
+  map<string, int64> by_type = 5;
+  map<string, int64> by_status = 6;
+  double average_latency_ms = 7;
+}
+
+// HealthCheckRequest requests health status
+message HealthCheckRequest {}
+
+// HealthCheckResponse returns health status
+message HealthCheckResponse {
+  bool healthy = 1;
+  string status = 2;
+  map<string, string> components = 3;
+}

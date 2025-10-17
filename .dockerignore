@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Build artifacts
+bin/
+*.o
+*.a
+*.so
+
+# Test files
+*_test.go
+testdata/
+
+# Documentation
+*.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Kubernetes
+k8s/
+*.yaml
+!config.yaml
+
+# Development
+.env
+.env.local
+
+# macOS
+.DS_Store

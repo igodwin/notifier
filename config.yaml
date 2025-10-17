@@ -1,0 +1,91 @@
+# Notifier Service Configuration
+
+server:
+  grpc_port: 50051
+  rest_port: 8080
+  host: "0.0.0.0"
+  mode: "both" # Options: both, grpc, rest
+
+queue:
+  type: "local" # Options: local, kafka
+  max_size: 10000
+  worker_count: 10
+  retry_attempts: 3
+  retry_backoff: "exponential" # Options: exponential, linear, fixed
+
+  # Local queue configuration
+  local:
+    buffer_size: 1000
+    persist_to_disk: false
+    persist_path: "/var/lib/notifier/queue.json"
+
+  # Kafka queue configuration (when type: kafka)
+  # kafka:
+  #   brokers:
+  #     - "localhost:9092"
+  #   topic: "notifications"
+  #   consumer_group: "notifier-service"
+  #   partition_count: 10
+  #   replication_factor: 3
+  #   enable_idempotence: true
+  #   compression_type: "snappy"
+
+notifiers:
+  # Enable stdout notifier (useful for development/debugging)
+  stdout: true
+
+  # SMTP email configuration
+  smtp:
+    host: "smtp.gmail.com"
+    port: 587
+    username: "your-email@gmail.com"
+    password: "your-app-password"
+    from: "notifications@yourservice.com"
+    use_tls: true
+
+  # Slack configuration
+  slack:
+    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+    # token: "xoxb-your-bot-token" # Alternative to webhook
+    # channel: "#notifications" # Default channel
+    username: "Notifier Bot"
+    icon_emoji: ":bell:"
+    # Channel-specific webhooks
+    # webhooks:
+    #   "#alerts": "https://hooks.slack.com/services/ALERTS/WEBHOOK"
+    #   "#monitoring": "https://hooks.slack.com/services/MONITORING/WEBHOOK"
+
+  # Ntfy configuration
+  ntfy:
+    server_url: "https://ntfy.sh"
+
+    # Token-based authentication (recommended for ntfy.sh)
+    # Supports both access tokens (tk_...) and publish tokens
+    # token: "tk_your_access_token"
+
+    # Basic authentication (alternative to token)
+    # username: "your-username"
+    # password: "your-password"
+
+    # Default topic if recipient not specified
+    # default_topic: "default-notifications"
+
+    # Skip TLS verification (for self-hosted servers with self-signed certs)
+    # insecure_skip_verify: false
+
+logging:
+  level: "info" # Options: debug, info, warn, error
+  format: "json" # Options: json, text
+  output_path: "stdout" # Options: stdout, stderr, or file path
+
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+  prometheus_enabled: true
+
+health_check:
+  enabled: true
+  port: 8081
+  path: "/health"
+  interval: 30 # seconds

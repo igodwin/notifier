@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifier-rest
+  labels:
+    app: notifier
+    service: rest
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: rest
+    protocol: TCP
+    name: http
+  selector:
+    app: notifier
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifier-grpc
+  labels:
+    app: notifier
+    service: grpc
+spec:
+  type: ClusterIP
+  ports:
+  - port: 50051
+    targetPort: grpc
+    protocol: TCP
+    name: grpc
+  selector:
+    app: notifier
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notifier-metrics
+  labels:
+    app: notifier
+    service: metrics
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9090
+    targetPort: metrics
+    protocol: TCP
+    name: metrics
+  selector:
+    app: notifier

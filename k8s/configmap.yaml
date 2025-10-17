@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: notifier-config
+  labels:
+    app: notifier
+data:
+  config.yaml: |
+    server:
+      grpc_port: 50051
+      rest_port: 8080
+      host: "0.0.0.0"
+      mode: "both"
+
+    queue:
+      type: "local"
+      max_size: 10000
+      worker_count: 10
+      retry_attempts: 3
+      retry_backoff: "exponential"
+      local:
+        buffer_size: 1000
+        persist_to_disk: false
+
+    notifiers:
+      stdout: true
+
+    logging:
+      level: "info"
+      format: "json"
+      output_path: "stdout"
+
+    metrics:
+      enabled: true
+      port: 9090
+      path: "/metrics"
+      prometheus_enabled: true
+
+    health_check:
+      enabled: true
+      port: 8081
+      path: "/health"
+      interval: 30
