@@ -9,20 +9,19 @@ services:
     ports:
       - "8080:8080"   # REST API
       - "50051:50051" # gRPC
-      - "9090:9090"   # Metrics
-      - "8081:8081"   # Health check
+      - "9090:9090"   # Metrics (future)
+      - "8081:8081"   # Health check (future)
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - notifier-data:/var/lib/notifier
     environment:
       - NOTIFIER_SERVER_MODE=both
       - NOTIFIER_LOGGING_LEVEL=info
-      - NOTIFIER_LOGGING_FORMAT=json
     restart: unless-stopped
     networks:
       - notifier-net
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8081/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3

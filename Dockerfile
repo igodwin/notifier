@@ -17,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # Build binaries
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o grpcserver ./cmd/grpcserver
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o restserver ./cmd/restserver
 
 # Runtime stage
@@ -34,7 +34,7 @@ RUN addgroup -g 1000 notifier && \
 WORKDIR /app
 
 # Copy binaries from builder
-COPY --from=builder /build/grpcserver /app/
+COPY --from=builder /build/server /app/
 COPY --from=builder /build/restserver /app/
 
 # Copy default config (can be overridden with volume mount)
@@ -50,6 +50,6 @@ USER notifier
 # Expose ports
 EXPOSE 8080 50051 9090 8081
 
-# Default to running both servers
+# Default to running the combined server (handles both REST and gRPC)
 # Can be overridden with docker run command
-CMD ["sh", "-c", "/app/grpcserver & /app/restserver"]
+CMD ["/app/server"]
