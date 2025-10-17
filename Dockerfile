@@ -16,9 +16,8 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build binaries
+# Build binary
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o restserver ./cmd/restserver
 
 # Runtime stage
 FROM alpine:latest
@@ -33,9 +32,8 @@ RUN addgroup -g 1000 notifier && \
 # Set working directory
 WORKDIR /app
 
-# Copy binaries from builder
+# Copy binary from builder
 COPY --from=builder /build/server /app/
-COPY --from=builder /build/restserver /app/
 
 # Copy default config (can be overridden with volume mount)
 COPY config.yaml /app/config.yaml
@@ -50,6 +48,6 @@ USER notifier
 # Expose ports
 EXPOSE 8080 50051 9090 8081
 
-# Default to running the combined server (handles both REST and gRPC)
-# Can be overridden with docker run command
+# Run server (defaults to both REST and gRPC)
+# Override mode with environment variable: -e SERVER_MODE=rest or -e SERVER_MODE=grpc
 CMD ["/app/server"]

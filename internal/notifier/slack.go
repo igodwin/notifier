@@ -30,17 +30,17 @@ type SlackNotifier struct {
 
 // slackMessage represents the Slack API request format
 type slackMessage struct {
-	Channel   string            `json:"channel,omitempty"`
-	Username  string            `json:"username,omitempty"`
-	IconEmoji string            `json:"icon_emoji,omitempty"`
-	Text      string            `json:"text,omitempty"`
-	Blocks    []slackBlock      `json:"blocks,omitempty"`
-	Markdown  bool              `json:"mrkdwn,omitempty"`
+	Channel   string       `json:"channel,omitempty"`
+	Username  string       `json:"username,omitempty"`
+	IconEmoji string       `json:"icon_emoji,omitempty"`
+	Text      string       `json:"text,omitempty"`
+	Blocks    []slackBlock `json:"blocks,omitempty"`
+	Markdown  bool         `json:"mrkdwn,omitempty"`
 }
 
 // slackBlock represents a Slack block element
 type slackBlock struct {
-	Type string         `json:"type"`
+	Type string          `json:"type"`
 	Text *slackTextBlock `json:"text,omitempty"`
 }
 

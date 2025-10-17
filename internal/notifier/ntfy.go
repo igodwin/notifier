@@ -43,17 +43,17 @@ type NtfyNotifier struct {
 
 // ntfyRequest represents the ntfy API request format
 type ntfyRequest struct {
-	Topic    string   `json:"topic"`
-	Message  string   `json:"message"`
-	Title    string   `json:"title,omitempty"`
-	Priority int      `json:"priority,omitempty"`
-	Tags     []string `json:"tags,omitempty"`
-	Click    string   `json:"click,omitempty"`
-	Attach   string   `json:"attach,omitempty"`
+	Topic    string       `json:"topic"`
+	Message  string       `json:"message"`
+	Title    string       `json:"title,omitempty"`
+	Priority int          `json:"priority,omitempty"`
+	Tags     []string     `json:"tags,omitempty"`
+	Click    string       `json:"click,omitempty"`
+	Attach   string       `json:"attach,omitempty"`
 	Actions  []ntfyAction `json:"actions,omitempty"`
-	Icon     string   `json:"icon,omitempty"`
-	Delay    string   `json:"delay,omitempty"`
-	Email    string   `json:"email,omitempty"`
+	Icon     string       `json:"icon,omitempty"`
+	Delay    string       `json:"delay,omitempty"`
+	Email    string       `json:"email,omitempty"`
 }
 
 // ntfyAction represents an action button in ntfy

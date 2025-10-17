@@ -104,12 +104,12 @@ type NotificationResult struct {
 
 // NotificationFilter is used for querying notifications
 type NotificationFilter struct {
-	IDs        []string             `json:"ids,omitempty"`
-	Types      []NotificationType   `json:"types,omitempty"`
-	Statuses   []NotificationStatus `json:"statuses,omitempty"`
-	Recipients []string             `json:"recipients,omitempty"`
-	CreatedAfter  *time.Time        `json:"created_after,omitempty"`
-	CreatedBefore *time.Time        `json:"created_before,omitempty"`
-	Limit      int                  `json:"limit,omitempty"`
-	Offset     int                  `json:"offset,omitempty"`
+	IDs           []string             `json:"ids,omitempty"`
+	Types         []NotificationType   `json:"types,omitempty"`
+	Statuses      []NotificationStatus `json:"statuses,omitempty"`
+	Recipients    []string             `json:"recipients,omitempty"`
+	CreatedAfter  *time.Time           `json:"created_after,omitempty"`
+	CreatedBefore *time.Time           `json:"created_before,omitempty"`
+	Limit         int                  `json:"limit,omitempty"`
+	Offset        int                  `json:"offset,omitempty"`
 }

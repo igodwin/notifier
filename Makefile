@@ -1,10 +1,11 @@
-.PHONY: proto proto-gen proto-clean deps build run-grpc run-rest run-both test lint docker-build docker-run clean
+.PHONY: proto proto-gen proto-clean deps build run run-grpc run-rest test lint fmt vet check docker-build docker-run clean help
 
 # Variables
 PROTO_DIR=api/grpc
 PROTO_FILE=$(PROTO_DIR)/notifier.proto
 PROTO_OUT=$(PROTO_DIR)/pb
 GO_MODULE=$(shell head -n 1 go.mod | awk '{print $$2}')
+GO_FILES=$(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./api/grpc/pb/*")
 
 # Generate protobuf code
 proto-gen:
@@ -35,33 +36,78 @@ proto-deps:
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	@echo "Protoc plugins installed"
 
-# Build binaries
+# Build binary
 build:
-	@echo "Building binaries..."
+	@echo "Building binary..."
 	@mkdir -p bin
-	go build -o bin/grpcserver ./cmd/grpcserver
-	go build -o bin/restserver ./cmd/restserver
-	@echo "Binaries built successfully"
+	go build -o bin/server ./cmd/server
+	@echo "Binary built successfully"
 
-# Run gRPC server
-run-grpc:
-	@echo "Running gRPC server..."
-	go run ./cmd/grpcserver/main.go
+# Run server (default: both REST and gRPC)
+run:
+	@echo "Running server (both REST and gRPC)..."
+	go run ./cmd/server/main.go
 
-# Run REST server
+# Run in REST-only mode
 run-rest:
-	@echo "Running REST server..."
-	go run ./cmd/restserver/main.go
+	@echo "Running server in REST-only mode..."
+	SERVER_MODE=rest go run ./cmd/server/main.go
+
+# Run in gRPC-only mode
+run-grpc:
+	@echo "Running server in gRPC-only mode..."
+	SERVER_MODE=grpc go run ./cmd/server/main.go
 
 # Run tests
 test:
 	@echo "Running tests..."
 	go test -v -race -cover ./...
 
-# Run linter
+# Run tests with coverage report
+test-coverage:
+	@echo "Running tests with coverage..."
+	go test -race -coverprofile=coverage.out -covermode=atomic ./...
+	go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+# Format code
+fmt:
+	@echo "Formatting code..."
+	gofmt -s -w $(GO_FILES)
+	@echo "Code formatted"
+
+# Check formatting
+fmt-check:
+	@echo "Checking code formatting..."
+	@if [ -n "$$(gofmt -l $(GO_FILES))" ]; then \
+		echo "The following files need formatting:"; \
+		gofmt -l $(GO_FILES); \
+		exit 1; \
+	fi
+	@echo "All files are properly formatted"
+
+# Run go vet
+vet:
+	@echo "Running go vet..."
+	go vet ./...
+	@echo "go vet passed"
+
+# Run static analysis
+check: fmt-check vet
+	@echo "Running static checks..."
+	go mod verify
+	@echo "All checks passed"
+
+# Run linter (requires golangci-lint)
 lint:
 	@echo "Running linter..."
+	@which golangci-lint > /dev/null || (echo "golangci-lint not installed. Run: brew install golangci-lint" && exit 1)
 	golangci-lint run ./...
+	@echo "Linting passed"
+
+# Run all quality checks
+qa: fmt vet lint test
+	@echo "All quality checks passed!"
 
 # Build Docker image
 docker-build:
@@ -84,15 +130,36 @@ clean:
 # Help
 help:
 	@echo "Available targets:"
-	@echo "  proto-gen     - Generate protobuf code"
-	@echo "  proto-clean   - Clean generated protobuf code"
-	@echo "  proto-deps    - Install protoc plugins"
-	@echo "  deps          - Install Go dependencies"
-	@echo "  build         - Build binaries"
-	@echo "  run-grpc      - Run gRPC server"
-	@echo "  run-rest      - Run REST server"
-	@echo "  test          - Run tests"
-	@echo "  lint          - Run linter"
-	@echo "  docker-build  - Build Docker image"
-	@echo "  docker-run    - Run Docker container"
-	@echo "  clean         - Clean build artifacts"
+	@echo ""
+	@echo "Build:"
+	@echo "  build            - Build server binary"
+	@echo "  clean            - Clean build artifacts"
+	@echo ""
+	@echo "Run:"
+	@echo "  run              - Run server (both REST and gRPC)"
+	@echo "  run-rest         - Run server in REST-only mode"
+	@echo "  run-grpc         - Run server in gRPC-only mode"
+	@echo ""
+	@echo "Test:"
+	@echo "  test             - Run tests with race detector"
+	@echo "  test-coverage    - Run tests with coverage report"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  fmt              - Format code with gofmt"
+	@echo "  fmt-check        - Check if code is formatted"
+	@echo "  vet              - Run go vet"
+	@echo "  lint             - Run golangci-lint (requires installation)"
+	@echo "  check            - Run fmt-check + vet + mod verify"
+	@echo "  qa               - Run all quality checks (fmt + vet + lint + test)"
+	@echo ""
+	@echo "Protobuf:"
+	@echo "  proto-gen        - Generate protobuf code"
+	@echo "  proto-clean      - Clean generated protobuf code"
+	@echo "  proto-deps       - Install protoc plugins"
+	@echo ""
+	@echo "Dependencies:"
+	@echo "  deps             - Install Go dependencies"
+	@echo ""
+	@echo "Docker:"
+	@echo "  docker-build     - Build Docker image"
+	@echo "  docker-run       - Run Docker container"

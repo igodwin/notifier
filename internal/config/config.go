@@ -11,12 +11,12 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server       ServerConfig       `mapstructure:"server"`
-	Queue        domain.QueueConfig `mapstructure:"queue"`
-	Notifiers    NotifiersConfig    `mapstructure:"notifiers"`
-	Logging      LoggingConfig      `mapstructure:"logging"`
-	Metrics      MetricsConfig      `mapstructure:"metrics"`
-	HealthCheck  HealthCheckConfig  `mapstructure:"health_check"`
+	Server      ServerConfig       `mapstructure:"server"`
+	Queue       domain.QueueConfig `mapstructure:"queue"`
+	Notifiers   NotifiersConfig    `mapstructure:"notifiers"`
+	Logging     LoggingConfig      `mapstructure:"logging"`
+	Metrics     MetricsConfig      `mapstructure:"metrics"`
+	HealthCheck HealthCheckConfig  `mapstructure:"health_check"`
 }
 
 // ServerConfig contains server configuration
@@ -44,10 +44,10 @@ type LoggingConfig struct {
 
 // MetricsConfig contains metrics/observability configuration
 type MetricsConfig struct {
-	Enabled        bool   `mapstructure:"enabled"`
-	Port           int    `mapstructure:"port"`
-	Path           string `mapstructure:"path"`
-	PrometheusEnabled bool `mapstructure:"prometheus_enabled"`
+	Enabled           bool   `mapstructure:"enabled"`
+	Port              int    `mapstructure:"port"`
+	Path              string `mapstructure:"path"`
+	PrometheusEnabled bool   `mapstructure:"prometheus_enabled"`
 }
 
 // HealthCheckConfig contains health check configuration

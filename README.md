@@ -45,7 +45,7 @@ cd notifier
 go mod tidy
 
 # Build and run
-go build -o bin/server ./cmd/server
+make build
 ./bin/server
 ```
 
@@ -53,6 +53,13 @@ Server starts with:
 - **REST API** on `http://localhost:8080`
 - **gRPC API** on `localhost:50051`
 - **Stdout notifier** enabled by default
+
+**Run in different modes:**
+```bash
+./bin/server                    # Both REST and gRPC (default)
+SERVER_MODE=rest ./bin/server   # REST only
+SERVER_MODE=grpc ./bin/server   # gRPC only
+```
 
 ### 2. Send Your First Notification
 
@@ -299,6 +306,18 @@ docker run -d \
   notifier:latest
 ```
 
+**Run in different modes:**
+```bash
+# Both REST and gRPC (default)
+docker run -d -p 8080:8080 -p 50051:50051 notifier:latest
+
+# REST only
+docker run -d -p 8080:8080 -e SERVER_MODE=rest notifier:latest
+
+# gRPC only
+docker run -d -p 50051:50051 -e SERVER_MODE=grpc notifier:latest
+```
+
 **Docker Compose:**
 ```bash
 docker-compose up -d
@@ -391,9 +410,7 @@ notifier/
 │       ├── router.go                # Route configuration
 │       └── types.go                 # Request/response types
 ├── cmd/
-│   ├── server/main.go              # Combined server (recommended)
-│   ├── grpcserver/main.go          # gRPC only
-│   └── restserver/main.go          # REST only
+│   └── server/main.go              # Unified server (configurable mode)
 ├── internal/
 │   ├── config/
 │   │   └── config.go               # Configuration management
@@ -434,14 +451,21 @@ notifier/
 ### Build Commands
 
 ```bash
-make build          # Build binaries
-make run-rest       # Run REST server
-make run-grpc       # Run gRPC server (when implemented)
-make test           # Run tests
-make lint           # Run linter
+make build          # Build server binary
+make run            # Run server (both REST and gRPC)
+make run-rest       # Run server in REST-only mode
+make run-grpc       # Run server in gRPC-only mode
+make test           # Run tests with race detector
+make test-coverage  # Generate HTML coverage report
+make fmt            # Format code with gofmt
+make vet            # Run go vet
+make lint           # Run golangci-lint
+make check          # Run fmt-check + vet + mod verify
+make qa             # Run all quality checks
 make proto-gen      # Generate protobuf code
 make docker-build   # Build Docker image
-make clean          # Clean artifacts
+make clean          # Clean build artifacts
+make help           # Show all available targets
 ```
 
 ### Adding a New Notifier

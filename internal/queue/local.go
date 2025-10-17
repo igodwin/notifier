@@ -8,20 +8,20 @@ import (
 	"sync"
 	"time"
 
-	"github.com/igodwin/notifier/internal/domain"
 	"github.com/google/uuid"
+	"github.com/igodwin/notifier/internal/domain"
 )
 
 // LocalQueue is an in-memory queue implementation
 type LocalQueue struct {
-	queue          chan *domain.QueueMessage
-	messages       map[string]*domain.QueueMessage
-	mu             sync.RWMutex
-	config         *domain.LocalQueueConfig
-	persistToDisk  bool
-	persistPath    string
-	closed         bool
-	closeChan      chan struct{}
+	queue         chan *domain.QueueMessage
+	messages      map[string]*domain.QueueMessage
+	mu            sync.RWMutex
+	config        *domain.LocalQueueConfig
+	persistToDisk bool
+	persistPath   string
+	closed        bool
+	closeChan     chan struct{}
 }
 
 // NewLocalQueue creates a new local queue instance

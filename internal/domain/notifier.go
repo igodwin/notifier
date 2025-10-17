@@ -57,11 +57,11 @@ type NotificationService interface {
 
 // NotificationStats contains statistics about notification processing
 type NotificationStats struct {
-	TotalSent      int64              `json:"total_sent"`
-	TotalFailed    int64              `json:"total_failed"`
-	TotalPending   int64              `json:"total_pending"`
-	TotalQueued    int64              `json:"total_queued"`
-	ByType         map[string]int64   `json:"by_type"`
-	ByStatus       map[string]int64   `json:"by_status"`
-	AverageLatency float64            `json:"average_latency_ms"`
+	TotalSent      int64            `json:"total_sent"`
+	TotalFailed    int64            `json:"total_failed"`
+	TotalPending   int64            `json:"total_pending"`
+	TotalQueued    int64            `json:"total_queued"`
+	ByType         map[string]int64 `json:"by_type"`
+	ByStatus       map[string]int64 `json:"by_status"`
+	AverageLatency float64          `json:"average_latency_ms"`
 }
