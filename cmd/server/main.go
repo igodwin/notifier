@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"github.com/igodwin/notifier/api/rest"
 	"github.com/igodwin/notifier/internal/config"
 	"github.com/igodwin/notifier/internal/domain"
+	"github.com/igodwin/notifier/internal/logging"
 	"github.com/igodwin/notifier/internal/notifier"
 	"github.com/igodwin/notifier/internal/queue"
 	"github.com/igodwin/notifier/internal/service"
@@ -26,11 +26,21 @@ func main() {
 	// Load configuration
 	cfg, err := config.Load("")
 	if err != nil {
-		log.Printf("Warning: failed to load config, using defaults: %v", err)
+		// Use basic logger before we have config
+		logger, _ := logging.NewFromConfig("info", "stdout")
+		logger.Warnf("Failed to load config, using defaults: %v", err)
 		cfg = getDefaultConfig()
 	}
 
-	log.Printf("Starting Notifier Service in mode: %s", cfg.Server.Mode)
+	// Create logger from config
+	logger, err := logging.NewFromConfig(cfg.Logging.Level, cfg.Logging.OutputPath)
+	if err != nil {
+		// Fallback to stdout if log file can't be opened
+		logger, _ = logging.NewFromConfig(cfg.Logging.Level, "stdout")
+		logger.Warnf("Failed to open log file, using stdout: %v", err)
+	}
+
+	logger.Infof("Starting Notifier Service in mode: %s", cfg.Server.Mode)
 
 	// Create context
 	ctx, cancel := context.WithCancel(context.Background())
@@ -41,32 +51,32 @@ func main() {
 	if cfg.Queue.Type == "local" {
 		q, err = queue.NewLocalQueue(cfg.Queue.Local)
 		if err != nil {
-			log.Fatalf("Failed to create queue: %v", err)
+			logger.Fatalf("Failed to create queue: %v", err)
 		}
-		log.Println("Using local queue")
+		logger.Info("Using local queue")
 	} else {
-		log.Fatalf("Queue type %s not implemented yet", cfg.Queue.Type)
+		logger.Fatalf("Queue type %s not implemented yet", cfg.Queue.Type)
 	}
 
 	// Initialize notifier factory and register notifiers
 	factory := notifier.NewFactory()
-	registerNotifiers(cfg, factory)
+	registerNotifiers(cfg, factory, logger)
 
 	// Check if any notifiers are registered
 	if len(factory.SupportedTypes()) == 0 {
-		log.Fatal("No notifiers configured. Please enable at least one notifier in config.yaml")
+		logger.Fatal("No notifiers configured. Please enable at least one notifier in config.yaml")
 	}
 
-	log.Printf("Supported notification types: %v", factory.SupportedTypes())
+	logger.Infof("Supported notification types: %v", factory.SupportedTypes())
 
 	// Create notification service
 	svc := service.NewNotificationService(factory, q, cfg.Queue.WorkerCount)
 
 	// Start workers
 	if err := svc.Start(ctx); err != nil {
-		log.Fatalf("Failed to start service: %v", err)
+		logger.Fatalf("Failed to start service: %v", err)
 	}
-	log.Printf("Started %d worker(s)", cfg.Queue.WorkerCount)
+	logger.Infof("Started %d worker(s)", cfg.Queue.WorkerCount)
 
 	// Wait group for both servers
 	var wg sync.WaitGroup
@@ -75,14 +85,14 @@ func main() {
 	var grpcServer *grpc.Server
 	if cfg.Server.Mode == "both" || cfg.Server.Mode == "grpc" {
 		wg.Add(1)
-		grpcServer = startGRPCServer(ctx, &wg, cfg, svc)
+		grpcServer = startGRPCServer(ctx, &wg, cfg, svc, logger)
 	}
 
 	// Start REST server if enabled
 	var restServer *http.Server
 	if cfg.Server.Mode == "both" || cfg.Server.Mode == "rest" {
 		wg.Add(1)
-		restServer = startRESTServer(ctx, &wg, cfg, svc)
+		restServer = startRESTServer(ctx, &wg, cfg, svc, logger)
 	}
 
 	// Wait for interrupt signal
@@ -90,7 +100,7 @@ func main() {
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	<-sigChan
 
-	log.Println("Shutting down servers...")
+	logger.Info("Shutting down servers...")
 
 	// Graceful shutdown
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -99,7 +109,7 @@ func main() {
 	// Stop REST server
 	if restServer != nil {
 		if err := restServer.Shutdown(shutdownCtx); err != nil {
-			log.Printf("Error during REST server shutdown: %v", err)
+			logger.Errorf("Error during REST server shutdown: %v", err)
 		}
 	}
 
@@ -113,64 +123,64 @@ func main() {
 
 	// Stop service
 	if err := svc.Stop(); err != nil {
-		log.Printf("Error stopping service: %v", err)
+		logger.Errorf("Error stopping service: %v", err)
 	}
 
-	log.Println("Servers stopped")
+	logger.Info("Servers stopped")
 }
 
-func registerNotifiers(cfg *config.Config, factory *notifier.Factory) {
+func registerNotifiers(cfg *config.Config, factory *notifier.Factory, logger *logging.Logger) {
 	if cfg.Notifiers.Stdout {
 		stdoutNotifier := notifier.NewStdoutNotifier()
 		if err := factory.RegisterNotifier(domain.TypeStdout, stdoutNotifier); err != nil {
-			log.Fatalf("Failed to register stdout notifier: %v", err)
+			logger.Fatalf("Failed to register stdout notifier: %v", err)
 		}
-		log.Println("Registered stdout notifier")
+		logger.Info("Registered stdout notifier")
 	}
 
 	if cfg.Notifiers.SMTP != nil {
 		smtpNotifier, err := notifier.NewSMTPNotifier(cfg.Notifiers.SMTP)
 		if err != nil {
-			log.Printf("Warning: failed to create SMTP notifier: %v", err)
+			logger.Warnf("Failed to create SMTP notifier: %v", err)
 		} else {
 			if err := factory.RegisterNotifier(domain.TypeEmail, smtpNotifier); err != nil {
-				log.Fatalf("Failed to register SMTP notifier: %v", err)
+				logger.Fatalf("Failed to register SMTP notifier: %v", err)
 			}
-			log.Println("Registered SMTP notifier")
+			logger.Info("Registered SMTP notifier")
 		}
 	}
 
 	if cfg.Notifiers.Slack != nil {
 		slackNotifier, err := notifier.NewSlackNotifier(cfg.Notifiers.Slack)
 		if err != nil {
-			log.Printf("Warning: failed to create Slack notifier: %v", err)
+			logger.Warnf("Failed to create Slack notifier: %v", err)
 		} else {
 			if err := factory.RegisterNotifier(domain.TypeSlack, slackNotifier); err != nil {
-				log.Fatalf("Failed to register Slack notifier: %v", err)
+				logger.Fatalf("Failed to register Slack notifier: %v", err)
 			}
-			log.Println("Registered Slack notifier")
+			logger.Info("Registered Slack notifier")
 		}
 	}
 
 	if cfg.Notifiers.Ntfy != nil {
 		ntfyNotifier, err := notifier.NewNtfyNotifier(cfg.Notifiers.Ntfy)
 		if err != nil {
-			log.Printf("Warning: failed to create Ntfy notifier: %v", err)
+			logger.Warnf("Failed to create Ntfy notifier: %v", err)
 		} else {
 			if err := factory.RegisterNotifier(domain.TypeNtfy, ntfyNotifier); err != nil {
-				log.Fatalf("Failed to register Ntfy notifier: %v", err)
+				logger.Fatalf("Failed to register Ntfy notifier: %v", err)
 			}
-			log.Println("Registered Ntfy notifier")
+			logger.Info("Registered Ntfy notifier")
 		}
 	}
 }
 
-func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService) *grpc.Server {
+func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger) *grpc.Server {
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.GRPCPort)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Fatalf("Failed to listen on %s: %v", addr, err)
+		logger.Fatalf("Failed to listen on %s: %v", addr, err)
 	}
 
 	grpcServer := grpc.NewServer()
@@ -183,16 +193,16 @@ func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 
 	go func() {
 		defer wg.Done()
-		log.Printf("gRPC server listening on %s", addr)
+		logger.Infof("gRPC server listening on %s", addr)
 		if err := grpcServer.Serve(lis); err != nil {
-			log.Fatalf("Failed to serve gRPC: %v", err)
+			logger.Fatalf("Failed to serve gRPC: %v", err)
 		}
 	}()
 
 	return grpcServer
 }
 
-func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService) *http.Server {
+func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger) *http.Server {
 	router := rest.NewRouter(svc)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.RESTPort)
@@ -206,9 +216,9 @@ func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 
 	go func() {
 		defer wg.Done()
-		log.Printf("REST server listening on %s", addr)
+		logger.Infof("REST server listening on %s", addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start REST server: %v", err)
+			logger.Fatalf("Failed to start REST server: %v", err)
 		}
 	}()
 
