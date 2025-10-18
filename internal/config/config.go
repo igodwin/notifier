@@ -67,7 +67,7 @@ func Load(configPath string) (*Config, error) {
 
 	// Configure viper
 	v.SetConfigName("notifier")
-	v.SetConfigType("config")
+	v.SetConfigType("yaml")
 
 	if configPath != "" {
 		v.AddConfigPath(configPath)
