@@ -36,7 +36,7 @@ WORKDIR /app
 COPY --from=builder /build/server /app/
 
 # Copy default config (can be overridden with volume mount)
-COPY config.yaml /app/config.yaml
+COPY notifier.config /app/notifier.config
 
 # Create directory for queue persistence
 RUN mkdir -p /var/lib/notifier && \

@@ -118,7 +118,7 @@ docker-build:
 # Run Docker container
 docker-run:
 	@echo "Running Docker container..."
-	docker run -p 8080:8080 -p 50051:50051 -v $(PWD)/config.yaml:/app/config.yaml notifier:latest
+	docker run -p 8080:8080 -p 50051:50051 -v $(PWD)/notifier.config:/app/notifier.config notifier:latest
 
 # Clean build artifacts
 clean:

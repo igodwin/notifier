@@ -149,20 +149,30 @@ curl http://localhost:8080/api/v1/notifications/{notification-id}
 ## Testing with Other Notifiers
 
 ### SMTP (Email)
-Update `config.yaml`:
+Update `notifier.config` with named accounts:
 ```yaml
 notifiers:
   smtp:
-    host: "smtp.gmail.com"
-    port: 587
-    username: "your-email@gmail.com"
-    password: "your-app-password"
-    from: "notifications@yourservice.com"
-    use_tls: true
+    personal:
+      host: "smtp.gmail.com"
+      port: 587
+      username: "your-email@gmail.com"
+      password: "your-app-password"
+      from: "your-email@gmail.com"
+      use_tls: true
+      default: true
+    work:
+      host: "smtp.company.com"
+      port: 587
+      username: "you@company.com"
+      password: "your-work-password"
+      from: "notifications@company.com"
+      use_tls: true
 ```
 
 Then send:
 ```bash
+# Uses default account (personal)
 curl -X POST http://localhost:8080/api/v1/notifications \
   -H "Content-Type: application/json" \
   -d '{
@@ -171,20 +181,38 @@ curl -X POST http://localhost:8080/api/v1/notifications \
     "body": "This is a test email!",
     "recipients": ["recipient@example.com"]
   }'
+
+# Specify account explicitly
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "email",
+    "account": "work",
+    "subject": "Test Email",
+    "body": "This is a test email!",
+    "recipients": ["recipient@example.com"]
+  }'
 ```
 
 ### Slack
-Update `config.yaml`:
+Update `notifier.config` with named workspaces:
 ```yaml
 notifiers:
   slack:
-    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
-    username: "Notifier Bot"
-    icon_emoji: ":bell:"
+    main:
+      webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+      username: "Notifier Bot"
+      icon_emoji: ":bell:"
+      default: true
+    team-a:
+      webhook_url: "https://hooks.slack.com/services/TEAM-A/WEBHOOK/URL"
+      username: "Team A Bot"
+      icon_emoji: ":rocket:"
 ```
 
 Then send:
 ```bash
+# Uses default workspace (main)
 curl -X POST http://localhost:8080/api/v1/notifications \
   -H "Content-Type: application/json" \
   -d '{
@@ -193,18 +221,36 @@ curl -X POST http://localhost:8080/api/v1/notifications \
     "body": "Application deployed successfully to production!",
     "recipients": ["#alerts"]
   }'
+
+# Specify workspace explicitly
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "slack",
+    "account": "team-a",
+    "subject": "Deployment Alert",
+    "body": "Application deployed successfully!",
+    "recipients": ["#alerts"]
+  }'
 ```
 
 ### Ntfy
-Update `config.yaml`:
+Update `notifier.config` with named servers:
 ```yaml
 notifiers:
   ntfy:
-    server_url: "https://ntfy.sh"
+    public:
+      server_url: "https://ntfy.sh"
+      default: true
+    private:
+      server_url: "https://ntfy.mycompany.com"
+      username: "your-username"
+      password: "your-password"
 ```
 
 Then send:
 ```bash
+# Uses default server (public)
 curl -X POST http://localhost:8080/api/v1/notifications \
   -H "Content-Type: application/json" \
   -d '{
@@ -215,6 +261,17 @@ curl -X POST http://localhost:8080/api/v1/notifications \
     "metadata": {
       "tags": ["warning", "skull"]
     }
+  }'
+
+# Specify server explicitly
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "ntfy",
+    "account": "private",
+    "subject": "Mobile Alert",
+    "body": "This will appear on your phone!",
+    "recipients": ["mytopic"]
   }'
 ```
 
@@ -230,8 +287,8 @@ export NOTIFIER_NOTIFIERS_SMTP_PASSWORD=secret
 ./bin/restserver
 ```
 
-### Using config.yaml
-Create or modify `config.yaml` in the project root:
+### Using notifier.config
+Create or modify `notifier.config` in the project root:
 ```yaml
 server:
   rest_port: 8080
@@ -255,7 +312,7 @@ docker build -t notifier:latest .
 ### Run with Docker
 ```bash
 docker run -p 8080:8080 \
-  -v $(pwd)/config.yaml:/app/config.yaml \
+  -v $(pwd)/notifier.config:/app/notifier.config \
   notifier:latest
 ```
 
@@ -296,18 +353,18 @@ kubectl port-forward svc/notifier-rest 8080:8080
 
 ### Server won't start
 - Check if port 8080 is already in use: `lsof -i :8080`
-- Check config.yaml syntax
+- Check notifier.config syntax
 - Verify all dependencies are installed: `go mod tidy`
 
 ### Notifications not sending
 - Check server logs for errors
-- Verify the notifier is enabled in config.yaml
+- Verify the notifier is enabled in notifier.config
 - For SMTP: Verify credentials and allow less secure apps
 - For Slack: Verify webhook URL is correct
 - For Ntfy: Ensure topic name is valid
 
 ### Queue filling up
-- Increase worker count in config.yaml
+- Increase worker count in notifier.config
 - Check if notifiers are failing
 - Review retry configuration
 

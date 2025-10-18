@@ -64,7 +64,7 @@ func main() {
 
 	// Check if any notifiers are registered
 	if len(factory.SupportedTypes()) == 0 {
-		logger.Fatal("No notifiers configured. Please enable at least one notifier in config.yaml")
+		logger.Fatal("No notifiers configured. Please enable at least one notifier in notifier.config")
 	}
 
 	logger.Infof("Supported notification types: %v", factory.SupportedTypes())

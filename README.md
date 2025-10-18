@@ -90,7 +90,7 @@ curl http://localhost:8080/api/v1/stats
 
 ### Basic Setup
 
-Create `config.yaml` in the project root:
+Create `notifier.config` in the project root:
 
 ```yaml
 server:
@@ -111,19 +111,34 @@ notifiers:
 
 ### Email Notifications (SMTP)
 
+Supports multiple email accounts with named instances:
+
 ```yaml
 notifiers:
   smtp:
-    host: "smtp.gmail.com"
-    port: 587
-    username: "your-email@gmail.com"
-    password: "your-app-password"
-    from: "notifications@yourservice.com"
-    use_tls: true
+    # Personal account (default)
+    personal:
+      host: "smtp.gmail.com"
+      port: 587
+      username: "your-email@gmail.com"
+      password: "your-app-password"
+      from: "personal@gmail.com"
+      use_tls: true
+      default: true
+
+    # Work account
+    work:
+      host: "smtp.company.com"
+      port: 587
+      username: "you@company.com"
+      password: "your-work-password"
+      from: "notifications@company.com"
+      use_tls: true
 ```
 
 **Usage:**
 ```bash
+# Uses default account (personal)
 curl -X POST http://localhost:8080/api/v1/notifications \
   -H "Content-Type: application/json" \
   -d '{
@@ -132,20 +147,47 @@ curl -X POST http://localhost:8080/api/v1/notifications \
     "body": "Thanks for signing up",
     "recipients": ["user@example.com"]
   }'
+
+# Specify account explicitly
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "email",
+    "account": "work",
+    "subject": "Welcome!",
+    "body": "Thanks for signing up",
+    "recipients": ["user@example.com"]
+  }'
 ```
 
 ### Slack Notifications
 
+Supports multiple workspaces with named instances:
+
 ```yaml
 notifiers:
   slack:
-    webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
-    username: "Notifier Bot"
-    icon_emoji: ":bell:"
+    # Main workspace (default)
+    main:
+      webhook_url: "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+      username: "Notifier Bot"
+      icon_emoji: ":bell:"
+      default: true
+
+    # Team workspace
+    team-a:
+      webhook_url: "https://hooks.slack.com/services/TEAM-A/WEBHOOK/URL"
+      username: "Team A Bot"
+      icon_emoji: ":rocket:"
+      # Channel-specific webhooks
+      webhooks:
+        "#alerts": "https://hooks.slack.com/services/ALERTS/WEBHOOK"
+        "#monitoring": "https://hooks.slack.com/services/MONITORING/WEBHOOK"
 ```
 
 **Usage:**
 ```bash
+# Uses default workspace (main)
 curl -X POST http://localhost:8080/api/v1/notifications \
   -H "Content-Type: application/json" \
   -d '{
@@ -154,20 +196,45 @@ curl -X POST http://localhost:8080/api/v1/notifications \
     "body": "v2.0 deployed to production",
     "recipients": ["#alerts"]
   }'
+
+# Specify workspace explicitly
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "slack",
+    "account": "team-a",
+    "subject": "Deployment Complete",
+    "body": "v2.0 deployed to production",
+    "recipients": ["#alerts"]
+  }'
 ```
 
 ### Ntfy Push Notifications
 
+Supports multiple ntfy servers with named instances:
+
 ```yaml
 notifiers:
   ntfy:
-    server_url: "https://ntfy.sh"
-    token: "tk_your_access_token"    # Optional, for private topics
-    default_topic: "myapp-alerts"
+    # Public ntfy.sh server (default)
+    public:
+      server_url: "https://ntfy.sh"
+      token: "tk_your_access_token"    # Optional, for private topics
+      default_topic: "myapp-alerts"
+      default: true
+
+    # Private self-hosted server
+    private:
+      server_url: "https://ntfy.mycompany.com"
+      username: "your-username"
+      password: "your-password"
+      default_topic: "company-alerts"
+      insecure_skip_verify: false  # Set true for self-signed certs
 ```
 
 **Usage:**
 ```bash
+# Uses default server (public)
 curl -X POST http://localhost:8080/api/v1/notifications \
   -H "Content-Type: application/json" \
   -d '{
@@ -180,6 +247,17 @@ curl -X POST http://localhost:8080/api/v1/notifications \
       "tags": ["warning", "rotating_light"],
       "click": "https://dashboard.example.com"
     }
+  }'
+
+# Specify server explicitly
+curl -X POST http://localhost:8080/api/v1/notifications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "ntfy",
+    "account": "private",
+    "subject": "Critical Alert",
+    "body": "Server CPU at 95%",
+    "recipients": ["alerts"]
   }'
 ```
 
@@ -302,7 +380,7 @@ docker run -d \
   --name notifier \
   -p 8080:8080 \
   -p 50051:50051 \
-  -v $(pwd)/config.yaml:/app/config.yaml:ro \
+  -v $(pwd)/notifier.config:/app/notifier.config:ro \
   notifier:latest
 ```
 
@@ -437,7 +515,7 @@ notifier/
 │   └── kustomization.yaml
 ├── docs/
 │   └── NTFY_GUIDE.md              # Ntfy integration guide
-├── config.yaml                     # Default configuration
+├── notifier.config                 # Default configuration
 ├── docker-compose.yaml
 ├── Dockerfile
 ├── Makefile
@@ -474,7 +552,7 @@ make help           # Show all available targets
 2. Implement `domain.Notifier` interface
 3. Add config struct to `internal/config/config.go`
 4. Register in `cmd/server/main.go`
-5. Update `config.yaml` with example config
+5. Update `notifier.config` with example config
 6. Add tests
 
 Example:

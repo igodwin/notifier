@@ -45,8 +45,8 @@ spec:
           value: "local"
         volumeMounts:
         - name: config
-          mountPath: /app/config.yaml
-          subPath: config.yaml
+          mountPath: /app/notifier.config
+          subPath: notifier.config
           readOnly: true
         - name: queue-storage
           mountPath: /var/lib/notifier
