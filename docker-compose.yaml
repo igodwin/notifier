@@ -12,7 +12,7 @@ services:
       - "9090:9090"   # Metrics (future)
       - "8081:8081"   # Health check (future)
     volumes:
-      - ./notifier.config:/app/notifier.config:ro
+      - ./config.yaml:/app/config.yaml:ro
       - notifier-data:/var/lib/notifier
     environment:
       - NOTIFIER_SERVER_MODE=both

@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/igodwin/notifier/internal/domain"
@@ -17,6 +19,7 @@ type Config struct {
 	Logging     LoggingConfig      `mapstructure:"logging"`
 	Metrics     MetricsConfig      `mapstructure:"metrics"`
 	HealthCheck HealthCheckConfig  `mapstructure:"health_check"`
+	ConfigFile  string             `mapstructure:"-"` // Path to config file used (not from config)
 }
 
 // ServerConfig contains server configuration
@@ -59,25 +62,30 @@ type HealthCheckConfig struct {
 }
 
 // Load loads configuration from file and environment variables
+// Returns the loaded config and the path to the config file that was used
 func Load(configPath string) (*Config, error) {
 	v := viper.New()
 
 	// Set default values
 	setDefaults(v)
 
-	// Configure viper
-	v.SetConfigName("notifier")
+	// Configure viper to look for config.yaml
+	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 
+	// Add config search paths
 	if configPath != "" {
 		v.AddConfigPath(configPath)
 	}
 
-	// Also look in common locations
 	v.AddConfigPath(".")
 	v.AddConfigPath("./config")
 	v.AddConfigPath("/etc/notifier")
-	v.AddConfigPath("$HOME/.notifier")
+
+	// Add $HOME/.notifier if HOME is set
+	if home := os.Getenv("HOME"); home != "" {
+		v.AddConfigPath(filepath.Join(home, ".notifier"))
+	}
 
 	// Environment variable support
 	v.SetEnvPrefix("NOTIFIER")
@@ -85,16 +93,28 @@ func Load(configPath string) (*Config, error) {
 	v.AutomaticEnv()
 
 	// Read config file
+	var configErr error
 	if err := v.ReadInConfig(); err != nil {
 		// Config file is optional if environment variables are set
 		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
+		configErr = err
 	}
 
 	var config Config
 	if err := v.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	// Store which config file was used
+	config.ConfigFile = v.ConfigFileUsed()
+	if config.ConfigFile == "" {
+		if configErr != nil {
+			config.ConfigFile = "no config file found (using defaults and environment variables)"
+		} else {
+			config.ConfigFile = "using defaults and environment variables"
+		}
 	}
 
 	// Validate configuration
@@ -143,9 +163,8 @@ func setDefaults(v *viper.Viper) {
 
 	// Notifier defaults
 	v.SetDefault("notifiers.stdout", true)
-	v.SetDefault("notifiers.smtp.port", 587)
-	v.SetDefault("notifiers.smtp.use_tls", true)
-	v.SetDefault("notifiers.ntfy.server_url", "https://ntfy.sh")
+	// Note: SMTP, Slack, and Ntfy now use named instances (maps)
+	// so we don't set defaults at the type level
 }
 
 // Validate validates the configuration
@@ -208,6 +227,92 @@ func (c *Config) GetEnabledNotifiers() []domain.NotificationType {
 	}
 
 	return enabled
+}
+
+// Sanitize returns a sanitized copy of the config with sensitive data redacted
+func (c *Config) Sanitize() map[string]interface{} {
+	sanitized := map[string]interface{}{
+		"config_file": c.ConfigFile,
+		"server": map[string]interface{}{
+			"grpc_port": c.Server.GRPCPort,
+			"rest_port": c.Server.RESTPort,
+			"host":      c.Server.Host,
+			"mode":      c.Server.Mode,
+		},
+		"queue": map[string]interface{}{
+			"type":           c.Queue.Type,
+			"worker_count":   c.Queue.WorkerCount,
+			"retry_attempts": c.Queue.RetryAttempts,
+		},
+		"logging": map[string]interface{}{
+			"level":  c.Logging.Level,
+			"format": c.Logging.Format,
+		},
+		"metrics": map[string]interface{}{
+			"enabled": c.Metrics.Enabled,
+			"port":    c.Metrics.Port,
+		},
+		"health_check": map[string]interface{}{
+			"enabled": c.HealthCheck.Enabled,
+			"port":    c.HealthCheck.Port,
+		},
+	}
+
+	// Sanitize notifiers
+	notifiers := map[string]interface{}{
+		"stdout": c.Notifiers.Stdout,
+	}
+
+	// Sanitize SMTP configs
+	if len(c.Notifiers.SMTP) > 0 {
+		smtpAccounts := make(map[string]interface{})
+		for name, cfg := range c.Notifiers.SMTP {
+			smtpAccounts[name] = map[string]interface{}{
+				"host":     cfg.Host,
+				"port":     cfg.Port,
+				"username": cfg.Username,
+				"password": "***REDACTED***",
+				"from":     cfg.From,
+				"use_tls":  cfg.UseTLS,
+				"default":  cfg.Default,
+			}
+		}
+		notifiers["smtp"] = smtpAccounts
+	}
+
+	// Sanitize Slack configs
+	if len(c.Notifiers.Slack) > 0 {
+		slackAccounts := make(map[string]interface{})
+		for name, cfg := range c.Notifiers.Slack {
+			slackAccounts[name] = map[string]interface{}{
+				"webhook_url": "***REDACTED***",
+				"token":       "***REDACTED***",
+				"username":    cfg.Username,
+				"icon_emoji":  cfg.IconEmoji,
+				"default":     cfg.Default,
+			}
+		}
+		notifiers["slack"] = slackAccounts
+	}
+
+	// Sanitize Ntfy configs
+	if len(c.Notifiers.Ntfy) > 0 {
+		ntfyAccounts := make(map[string]interface{})
+		for name, cfg := range c.Notifiers.Ntfy {
+			ntfyAccounts[name] = map[string]interface{}{
+				"server_url":    cfg.ServerURL,
+				"token":         "***REDACTED***",
+				"username":      cfg.Username,
+				"password":      "***REDACTED***",
+				"default_topic": cfg.DefaultTopic,
+				"default":       cfg.Default,
+			}
+		}
+		notifiers["ntfy"] = ntfyAccounts
+	}
+
+	sanitized["notifiers"] = notifiers
+	return sanitized
 }
 
 // GetDefaultAccount returns the default account name for a notifier type, or the first account if no default is set

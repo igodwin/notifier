@@ -149,7 +149,7 @@ curl http://localhost:8080/api/v1/notifications/{notification-id}
 ## Testing with Other Notifiers
 
 ### SMTP (Email)
-Update `notifier.config` with named accounts:
+Update `config.yaml` with named accounts:
 ```yaml
 notifiers:
   smtp:
@@ -195,7 +195,7 @@ curl -X POST http://localhost:8080/api/v1/notifications \
 ```
 
 ### Slack
-Update `notifier.config` with named workspaces:
+Update `config.yaml` with named workspaces:
 ```yaml
 notifiers:
   slack:
@@ -235,7 +235,7 @@ curl -X POST http://localhost:8080/api/v1/notifications \
 ```
 
 ### Ntfy
-Update `notifier.config` with named servers:
+Update `config.yaml` with named servers:
 ```yaml
 notifiers:
   ntfy:
@@ -287,8 +287,8 @@ export NOTIFIER_NOTIFIERS_SMTP_PASSWORD=secret
 ./bin/restserver
 ```
 
-### Using notifier.config
-Create or modify `notifier.config` in the project root:
+### Using config.yaml
+Create or modify `config.yaml` in the project root:
 ```yaml
 server:
   rest_port: 8080
@@ -312,7 +312,7 @@ docker build -t notifier:latest .
 ### Run with Docker
 ```bash
 docker run -p 8080:8080 \
-  -v $(pwd)/notifier.config:/app/notifier.config \
+  -v $(pwd)/config.yaml:/app/config.yaml \
   notifier:latest
 ```
 
@@ -353,18 +353,18 @@ kubectl port-forward svc/notifier-rest 8080:8080
 
 ### Server won't start
 - Check if port 8080 is already in use: `lsof -i :8080`
-- Check notifier.config syntax
+- Check config.yaml syntax
 - Verify all dependencies are installed: `go mod tidy`
 
 ### Notifications not sending
 - Check server logs for errors
-- Verify the notifier is enabled in notifier.config
+- Verify the notifier is enabled in config.yaml
 - For SMTP: Verify credentials and allow less secure apps
 - For Slack: Verify webhook URL is correct
 - For Ntfy: Ensure topic name is valid
 
 ### Queue filling up
-- Increase worker count in notifier.config
+- Increase worker count in config.yaml
 - Check if notifiers are failing
 - Review retry configuration
 

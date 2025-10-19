@@ -90,7 +90,7 @@ curl http://localhost:8080/api/v1/stats
 
 ### Basic Setup
 
-Create `notifier.config` in the project root:
+Create `config.yaml` in the project root:
 
 ```yaml
 server:
@@ -380,7 +380,7 @@ docker run -d \
   --name notifier \
   -p 8080:8080 \
   -p 50051:50051 \
-  -v $(pwd)/notifier.config:/app/notifier.config:ro \
+  -v $(pwd)/config.yaml:/app/config.yaml:ro \
   notifier:latest
 ```
 
@@ -515,7 +515,7 @@ notifier/
 │   └── kustomization.yaml
 ├── docs/
 │   └── NTFY_GUIDE.md              # Ntfy integration guide
-├── notifier.config                 # Default configuration
+├── config.yaml                 # Default configuration
 ├── docker-compose.yaml
 ├── Dockerfile
 ├── Makefile
@@ -552,7 +552,7 @@ make help           # Show all available targets
 2. Implement `domain.Notifier` interface
 3. Add config struct to `internal/config/config.go`
 4. Register in `cmd/server/main.go`
-5. Update `notifier.config` with example config
+5. Update `config.yaml` with example config
 6. Add tests
 
 Example:

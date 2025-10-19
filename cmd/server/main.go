@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 	"syscall"
 	"time"
 
+	grpcapi "github.com/igodwin/notifier/api/grpc"
+	pb "github.com/igodwin/notifier/api/grpc/pb"
 	"github.com/igodwin/notifier/api/rest"
 	"github.com/igodwin/notifier/internal/config"
 	"github.com/igodwin/notifier/internal/domain"
@@ -22,7 +25,23 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
+var (
+	// Build information - set via ldflags during build
+	// Example: go build -ldflags "-X main.Version=1.0.0 -X main.GitCommit=$(git rev-parse HEAD)"
+	Version   = "dev"
+	GitCommit = "unknown"
+	BuildTime = "unknown"
+)
+
 func main() {
+	// Print service identifier and build info
+	fmt.Printf("====================================\n")
+	fmt.Printf("Notifier Service\n")
+	fmt.Printf("Version:    %s\n", Version)
+	fmt.Printf("Git Commit: %s\n", GitCommit)
+	fmt.Printf("Build Time: %s\n", BuildTime)
+	fmt.Printf("====================================\n")
+
 	// Load configuration
 	cfg, err := config.Load("")
 	if err != nil {
@@ -38,6 +57,14 @@ func main() {
 		// Fallback to stdout if log file can't be opened
 		logger, _ = logging.NewFromConfig(cfg.Logging.Level, "stdout")
 		logger.Warnf("Failed to open log file, using stdout: %v", err)
+	}
+
+	// Log which config file was loaded
+	logger.Infof("Loaded configuration from: %s", cfg.ConfigFile)
+
+	// Log sanitized config (with sensitive data redacted)
+	if sanitized, err := json.MarshalIndent(cfg.Sanitize(), "", "  "); err == nil {
+		logger.Infof("Configuration:\n%s", string(sanitized))
 	}
 
 	logger.Infof("Starting Notifier Service in mode: %s", cfg.Server.Mode)
@@ -200,11 +227,14 @@ func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 
 	grpcServer := grpc.NewServer()
 
-	// TODO: Register gRPC service implementation when protobuf is generated
-	// pb.RegisterNotifierServiceServer(grpcServer, grpcHandler)
+	// Create and register gRPC handler
+	grpcHandler := grpcapi.NewNotifierHandler(svc)
+	pb.RegisterNotifierServiceServer(grpcServer, grpcHandler)
 
 	// Enable reflection for tools like grpcurl
 	reflection.Register(grpcServer)
+
+	logger.Info("Registered gRPC NotifierService")
 
 	go func() {
 		defer wg.Done()

@@ -7,12 +7,18 @@ PROTO_OUT=$(PROTO_DIR)/pb
 GO_MODULE=$(shell head -n 1 go.mod | awk '{print $$2}')
 GO_FILES=$(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path "./api/grpc/pb/*")
 
+# Build information
+VERSION ?= dev
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S_UTC')
+LDFLAGS := -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)
+
 # Generate protobuf code
 proto-gen:
 	@echo "Generating protobuf code..."
 	@mkdir -p $(PROTO_OUT)
-	protoc --go_out=$(PROTO_OUT) --go_opt=paths=source_relative \
-		--go-grpc_out=$(PROTO_OUT) --go-grpc_opt=paths=source_relative \
+	protoc -I. --go_out=. --go_opt=module=$(GO_MODULE) \
+		--go-grpc_out=. --go-grpc_opt=module=$(GO_MODULE) \
 		$(PROTO_FILE)
 	@echo "Protobuf code generated successfully"
 
@@ -39,8 +45,11 @@ proto-deps:
 # Build binary
 build:
 	@echo "Building binary..."
+	@echo "Version: $(VERSION)"
+	@echo "Git Commit: $(GIT_COMMIT)"
+	@echo "Build Time: $(BUILD_TIME)"
 	@mkdir -p bin
-	go build -o bin/server ./cmd/server
+	go build -ldflags "$(LDFLAGS)" -o bin/server ./cmd/server
 	@echo "Binary built successfully"
 
 # Run server (default: both REST and gRPC)
@@ -112,13 +121,20 @@ qa: fmt vet lint test
 # Build Docker image
 docker-build:
 	@echo "Building Docker image..."
-	docker build -t notifier:latest .
+	@echo "Version: $(VERSION)"
+	@echo "Git Commit: $(GIT_COMMIT)"
+	@echo "Build Time: $(BUILD_TIME)"
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		-t notifier:latest .
 	@echo "Docker image built successfully"
 
 # Run Docker container
 docker-run:
 	@echo "Running Docker container..."
-	docker run -p 8080:8080 -p 50051:50051 -v $(PWD)/notifier.config:/app/notifier.config notifier:latest
+	docker run -p 8080:8080 -p 50051:50051 -v $(PWD)/config.yaml:/app/config.yaml notifier:latest
 
 # Clean build artifacts
 clean:

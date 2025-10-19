@@ -204,7 +204,7 @@ Update notification status
 
 ### Hierarchy (highest to lowest priority)
 1. Environment variables (prefixed with `NOTIFIER_`)
-2. Configuration file (notifier.config)
+2. Configuration file (config.yaml)
 3. Default values
 
 ### Example Environment Variables
@@ -296,7 +296,7 @@ NOTIFIER_NOTIFIERS_SLACK_WEBHOOK_URL=https://hooks.slack.com/...
 3. Add configuration struct to `internal/config/`
 4. Register in factory during initialization
 5. Update protobuf and REST API types
-6. Add configuration example to `notifier.config`
+6. Add configuration example to `config.yaml`
 
 ### Adding a New Queue Implementation
 

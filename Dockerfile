@@ -1,6 +1,11 @@
 # Build stage
 FROM golang:1.24-alpine AS builder
 
+# Build arguments
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
 # Install build dependencies
 RUN apk add --no-cache git make
 
@@ -16,8 +21,10 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build binary
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
+# Build binary with version information
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+    -ldflags "-X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
+    -o server ./cmd/server
 
 # Runtime stage
 FROM alpine:latest
@@ -36,7 +43,7 @@ WORKDIR /app
 COPY --from=builder /build/server /app/
 
 # Copy default config (can be overridden with volume mount)
-COPY notifier.config /app/notifier.config
+COPY config.yaml /app/config.yaml
 
 # Create directory for queue persistence
 RUN mkdir -p /var/lib/notifier && \
