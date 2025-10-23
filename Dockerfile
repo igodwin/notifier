@@ -6,8 +6,8 @@ ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_TIME=unknown
 
-# Install build dependencies
-RUN apk add --no-cache git make
+# Install build dependencies including protoc
+RUN apk add --no-cache git make protobuf protobuf-dev
 
 # Set working directory
 WORKDIR /build
@@ -18,8 +18,15 @@ COPY go.mod go.sum ./
 # Download dependencies
 RUN go mod download
 
+# Install protoc plugins
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@latest && \
+    go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+
 # Copy source code
 COPY . .
+
+# Generate protobuf code
+RUN make proto-gen
 
 # Build binary with version information
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
