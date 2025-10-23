@@ -15,7 +15,10 @@ type SendNotificationRequest struct {
 	Priority     int                    `json:"priority,omitempty"`
 	Subject      string                 `json:"subject"`
 	Body         string                 `json:"body"`
+	ContentType  string                 `json:"content_type,omitempty"` // "text" or "html" - auto-detected if not specified
 	Recipients   []string               `json:"recipients"`
+	CC           []string               `json:"cc,omitempty"`  // Carbon copy recipients (email only)
+	BCC          []string               `json:"bcc,omitempty"` // Blind carbon copy recipients (email only)
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	ScheduledFor *time.Time             `json:"scheduled_for,omitempty"`
 	MaxRetries   int                    `json:"max_retries,omitempty"`
@@ -27,8 +30,11 @@ func (r *SendNotificationRequest) Validate() error {
 		return fmt.Errorf("type is required")
 	}
 
-	if len(r.Recipients) == 0 {
-		return fmt.Errorf("at least one recipient is required")
+	// For email, allow BCC-only (at least one recipient in To, CC, or BCC)
+	// For other types, require Recipients
+	totalRecipients := len(r.Recipients) + len(r.CC) + len(r.BCC)
+	if totalRecipients == 0 {
+		return fmt.Errorf("at least one recipient is required (recipients, cc, or bcc)")
 	}
 
 	if r.Body == "" {
@@ -45,6 +51,12 @@ func (r *SendNotificationRequest) ToNotification() *domain.Notification {
 		maxRetries = 3 // Default
 	}
 
+	// Convert content type, defaulting to text
+	contentType := domain.ContentType(r.ContentType)
+	if contentType == "" {
+		contentType = domain.ContentTypeText
+	}
+
 	return &domain.Notification{
 		ID:           uuid.New().String(),
 		Type:         domain.NotificationType(r.Type),
@@ -53,7 +65,10 @@ func (r *SendNotificationRequest) ToNotification() *domain.Notification {
 		Status:       domain.StatusPending,
 		Subject:      r.Subject,
 		Body:         r.Body,
+		ContentType:  contentType,
 		Recipients:   r.Recipients,
+		CC:           r.CC,
+		BCC:          r.BCC,
 		Metadata:     r.Metadata,
 		CreatedAt:    time.Now(),
 		ScheduledFor: r.ScheduledFor,
@@ -86,7 +101,10 @@ type Notification struct {
 	Status       string                 `json:"status"`
 	Subject      string                 `json:"subject"`
 	Body         string                 `json:"body"`
+	ContentType  string                 `json:"content_type,omitempty"`
 	Recipients   []string               `json:"recipients"`
+	CC           []string               `json:"cc,omitempty"`
+	BCC          []string               `json:"bcc,omitempty"`
 	Metadata     map[string]interface{} `json:"metadata,omitempty"`
 	CreatedAt    time.Time              `json:"created_at"`
 	ScheduledFor *time.Time             `json:"scheduled_for,omitempty"`
@@ -106,7 +124,10 @@ func NotificationFromDomain(n *domain.Notification) Notification {
 		Status:       string(n.Status),
 		Subject:      n.Subject,
 		Body:         n.Body,
+		ContentType:  string(n.ContentType),
 		Recipients:   n.Recipients,
+		CC:           n.CC,
+		BCC:          n.BCC,
 		Metadata:     n.Metadata,
 		CreatedAt:    n.CreatedAt,
 		ScheduledFor: n.ScheduledFor,

@@ -57,6 +57,9 @@ type NotificationService interface {
 
 	// GetStats returns notification statistics
 	GetStats(ctx context.Context) (*NotificationStats, error)
+
+	// GetNotifiers returns information about available notifiers
+	GetNotifiers(ctx context.Context) (*NotifiersResponse, error)
 }
 
 // NotificationStats contains statistics about notification processing
@@ -68,4 +71,16 @@ type NotificationStats struct {
 	ByType         map[string]int64 `json:"by_type"`
 	ByStatus       map[string]int64 `json:"by_status"`
 	AverageLatency float64          `json:"average_latency_ms"`
+}
+
+// NotifierInfo contains information about a configured notifier type
+type NotifierInfo struct {
+	Type           NotificationType `json:"type"`
+	Accounts       []string         `json:"accounts"`
+	DefaultAccount string           `json:"default_account"`
+}
+
+// NotifiersResponse contains the list of available notifiers
+type NotifiersResponse struct {
+	Notifiers []NotifierInfo `json:"notifiers"`
 }

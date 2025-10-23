@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/igodwin/notifier/internal/domain"
+	"github.com/igodwin/notifier/internal/logging"
 )
 
 // AccountResolver is an interface for resolving default accounts
@@ -24,10 +25,11 @@ type NotificationService struct {
 	workerCount     int
 	stopChan        chan struct{}
 	wg              sync.WaitGroup
+	logger          *logging.Logger
 }
 
 // NewNotificationService creates a new notification service
-func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, workerCount int, accountResolver AccountResolver) *NotificationService {
+func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, workerCount int, accountResolver AccountResolver, logger *logging.Logger) *NotificationService {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -39,6 +41,7 @@ func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, 
 		notifications:   make(map[string]*domain.Notification),
 		workerCount:     workerCount,
 		stopChan:        make(chan struct{}),
+		logger:          logger,
 	}
 }
 
@@ -97,6 +100,9 @@ func (s *NotificationService) worker(ctx context.Context, id int) {
 func (s *NotificationService) processNotification(ctx context.Context, msg *domain.QueueMessage) {
 	notification := msg.Notification
 
+	s.logger.Debugf("Processing notification - id=%s, type=%s, recipients=%d",
+		notification.ID, notification.Type, len(notification.Recipients))
+
 	// Resolve account if not specified
 	account := notification.Account
 	if account == "" && s.accountResolver != nil {
@@ -106,6 +112,8 @@ func (s *NotificationService) processNotification(ctx context.Context, msg *doma
 	// Get the appropriate notifier
 	notifier, err := s.factory.Create(notification.Type, account)
 	if err != nil {
+		s.logger.Errorf("Failed to create notifier - id=%s, type=%s, account=%s, error=%v",
+			notification.ID, notification.Type, account, err)
 		notification.Status = domain.StatusFailed
 		notification.LastError = fmt.Sprintf("failed to create notifier: %v", err)
 		s.queue.Nack(ctx, msg.ID, false)
@@ -125,9 +133,13 @@ func (s *NotificationService) processNotification(ctx context.Context, msg *doma
 		// Check if we should retry
 		if notification.RetryCount < notification.MaxRetries {
 			notification.Status = domain.StatusRetrying
+			s.logger.Warnf("Notification send failed, will retry - id=%s, type=%s, account=%s, attempt=%d/%d, error=%s",
+				notification.ID, notification.Type, account, notification.RetryCount, notification.MaxRetries, notification.LastError)
 			s.queue.Nack(ctx, msg.ID, true) // Requeue
 		} else {
 			notification.Status = domain.StatusFailed
+			s.logger.Errorf("Notification send failed permanently - id=%s, type=%s, account=%s, recipients=%v, attempts=%d, error=%s",
+				notification.ID, notification.Type, account, notification.Recipients, notification.RetryCount, notification.LastError)
 			s.queue.Nack(ctx, msg.ID, false) // Don't requeue
 		}
 	} else {
@@ -135,6 +147,8 @@ func (s *NotificationService) processNotification(ctx context.Context, msg *doma
 		now := time.Now()
 		notification.SentAt = &now
 		s.queue.Ack(ctx, msg.ID)
+		s.logger.Infof("Notification sent successfully - id=%s, type=%s, account=%s, recipients=%v",
+			notification.ID, notification.Type, account, notification.Recipients)
 	}
 
 	s.updateNotification(notification)
@@ -300,6 +314,30 @@ func (s *NotificationService) GetStats(ctx context.Context) (*domain.Notificatio
 	}
 
 	return stats, nil
+}
+
+// GetNotifiers returns information about available notifiers
+func (s *NotificationService) GetNotifiers(ctx context.Context) (*domain.NotifiersResponse, error) {
+	supportedTypes := s.factory.SupportedTypes()
+	notifiers := make([]domain.NotifierInfo, 0, len(supportedTypes))
+
+	for _, notifType := range supportedTypes {
+		accounts := s.factory.GetAccounts(notifType)
+		defaultAccount := ""
+		if s.accountResolver != nil {
+			defaultAccount = s.accountResolver.GetDefaultAccount(notifType)
+		}
+
+		notifiers = append(notifiers, domain.NotifierInfo{
+			Type:           notifType,
+			Accounts:       accounts,
+			DefaultAccount: defaultAccount,
+		})
+	}
+
+	return &domain.NotifiersResponse{
+		Notifiers: notifiers,
+	}, nil
 }
 
 // storeNotification stores a notification in memory

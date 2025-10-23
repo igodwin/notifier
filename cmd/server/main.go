@@ -97,7 +97,7 @@ func main() {
 	logger.Infof("Supported notification types: %v", factory.SupportedTypes())
 
 	// Create notification service (pass config as account resolver)
-	svc := service.NewNotificationService(factory, q, cfg.Queue.WorkerCount, cfg)
+	svc := service.NewNotificationService(factory, q, cfg.Queue.WorkerCount, cfg, logger)
 
 	// Start workers
 	if err := svc.Start(ctx); err != nil {
@@ -228,7 +228,7 @@ func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 	grpcServer := grpc.NewServer()
 
 	// Create and register gRPC handler
-	grpcHandler := grpcapi.NewNotifierHandler(svc)
+	grpcHandler := grpcapi.NewNotifierHandler(svc, logger)
 	pb.RegisterNotifierServiceServer(grpcServer, grpcHandler)
 
 	// Enable reflection for tools like grpcurl
@@ -248,7 +248,7 @@ func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 }
 
 func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger) *http.Server {
-	router := rest.NewRouter(svc)
+	router := rest.NewRouter(svc, logger)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.RESTPort)
 	server := &http.Server{

@@ -2,8 +2,12 @@ package notifier
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"html"
 	"net/smtp"
+	"regexp"
 	"strings"
 	"time"
 
@@ -17,6 +21,7 @@ type SMTPConfig struct {
 	Username string `mapstructure:"username"`
 	Password string `mapstructure:"password"`
 	From     string `mapstructure:"from"`
+	FromName string `mapstructure:"from_name"` // Optional display name for From header
 	UseTLS   bool   `mapstructure:"use_tls"`
 	Default  bool   `mapstructure:"default"` // Mark this instance as default
 }
@@ -63,8 +68,14 @@ func (s *SMTPNotifier) Send(ctx context.Context, notification *domain.Notificati
 		return nil, err
 	}
 
+	// Collect all recipients (To, CC, BCC) for validation
+	allRecipients := make([]string, 0, len(notification.Recipients)+len(notification.CC)+len(notification.BCC))
+	allRecipients = append(allRecipients, notification.Recipients...)
+	allRecipients = append(allRecipients, notification.CC...)
+	allRecipients = append(allRecipients, notification.BCC...)
+
 	// Validate email recipients
-	for _, recipient := range notification.Recipients {
+	for _, recipient := range allRecipients {
 		if !strings.Contains(recipient, "@") {
 			return &domain.NotificationResult{
 				NotificationID: notification.ID,
@@ -82,7 +93,8 @@ func (s *SMTPNotifier) Send(ctx context.Context, notification *domain.Notificati
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 	auth := smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.Host)
 
-	err := smtp.SendMail(addr, auth, s.config.From, notification.Recipients, []byte(message))
+	// smtp.SendMail needs all recipients (To, CC, BCC) for actual delivery
+	err := smtp.SendMail(addr, auth, s.config.From, allRecipients, []byte(message))
 	if err != nil {
 		return &domain.NotificationResult{
 			NotificationID: notification.ID,
@@ -109,21 +121,130 @@ func (s *SMTPNotifier) Send(ctx context.Context, notification *domain.Notificati
 func (s *SMTPNotifier) buildMessage(notification *domain.Notification) string {
 	var builder strings.Builder
 
-	builder.WriteString(fmt.Sprintf("From: %s\r\n", s.config.From))
-	builder.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(notification.Recipients, ", ")))
+	// Format From header with optional display name
+	fromHeader := s.config.From
+	if s.config.FromName != "" {
+		fromHeader = fmt.Sprintf("%s <%s>", s.config.FromName, s.config.From)
+	}
+
+	builder.WriteString(fmt.Sprintf("From: %s\r\n", fromHeader))
+
+	// Add To header (optional if only BCC is specified)
+	if len(notification.Recipients) > 0 {
+		builder.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(notification.Recipients, ", ")))
+	}
+
+	// Add CC header (optional)
+	if len(notification.CC) > 0 {
+		builder.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(notification.CC, ", ")))
+	}
+
+	// Note: BCC is intentionally NOT included in headers (that's the point of BCC!)
+
 	builder.WriteString(fmt.Sprintf("Subject: %s\r\n", notification.Subject))
 	builder.WriteString("MIME-Version: 1.0\r\n")
-	builder.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-	builder.WriteString("\r\n")
-	builder.WriteString(notification.Body)
+
+	// Auto-detect HTML if content type not set
+	contentType := notification.ContentType
+	if contentType == "" {
+		contentType = detectContentType(notification.Body)
+	}
+
+	// Build message based on content type
+	if contentType == domain.ContentTypeHTML {
+		// Send multipart/alternative with both text and HTML
+		s.buildMultipartMessage(&builder, notification)
+	} else {
+		// Send plain text only
+		builder.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+		builder.WriteString("\r\n")
+		builder.WriteString(notification.Body)
+	}
 
 	return builder.String()
 }
 
+// buildMultipartMessage builds a multipart/alternative email with both text and HTML versions
+func (s *SMTPNotifier) buildMultipartMessage(builder *strings.Builder, notification *domain.Notification) {
+	// Generate a unique boundary
+	boundary := generateBoundary()
+
+	builder.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary))
+	builder.WriteString("\r\n")
+
+	// Plain text version (auto-generated from HTML)
+	builder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	builder.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
+	builder.WriteString("Content-Transfer-Encoding: 7bit\r\n")
+	builder.WriteString("\r\n")
+	builder.WriteString(htmlToPlainText(notification.Body))
+	builder.WriteString("\r\n\r\n")
+
+	// HTML version
+	builder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
+	builder.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
+	builder.WriteString("Content-Transfer-Encoding: 7bit\r\n")
+	builder.WriteString("\r\n")
+	builder.WriteString(notification.Body)
+	builder.WriteString("\r\n\r\n")
+
+	// End boundary
+	builder.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
+}
+
+// detectContentType auto-detects if the body is HTML
+func detectContentType(body string) domain.ContentType {
+	trimmed := strings.TrimSpace(body)
+	// Check for common HTML indicators
+	if strings.HasPrefix(trimmed, "<") ||
+	   strings.Contains(trimmed, "<html") ||
+	   strings.Contains(trimmed, "<!DOCTYPE") ||
+	   strings.Contains(trimmed, "<p>") ||
+	   strings.Contains(trimmed, "<div>") ||
+	   strings.Contains(trimmed, "<br>") {
+		return domain.ContentTypeHTML
+	}
+	return domain.ContentTypeText
+}
+
+// generateBoundary generates a unique boundary string for multipart emails
+func generateBoundary() string {
+	buf := make([]byte, 16)
+	rand.Read(buf)
+	return "boundary_" + hex.EncodeToString(buf)
+}
+
+// htmlToPlainText converts HTML to plain text (simple implementation)
+func htmlToPlainText(htmlContent string) string {
+	// Remove HTML tags
+	re := regexp.MustCompile(`<[^>]*>`)
+	text := re.ReplaceAllString(htmlContent, "")
+
+	// Decode HTML entities
+	text = html.UnescapeString(text)
+
+	// Clean up whitespace
+	text = strings.ReplaceAll(text, "\r\n", "\n")
+	text = regexp.MustCompile(`\n{3,}`).ReplaceAllString(text, "\n\n")
+	text = strings.TrimSpace(text)
+
+	return text
+}
+
 // Validate checks if the notification is valid for SMTP
 func (s *SMTPNotifier) Validate(notification *domain.Notification) error {
-	if err := s.BaseNotifier.Validate(notification); err != nil {
-		return err
+	if notification == nil {
+		return fmt.Errorf("notification is nil")
+	}
+
+	// For email, we need at least one recipient (To, CC, or BCC)
+	totalRecipients := len(notification.Recipients) + len(notification.CC) + len(notification.BCC)
+	if totalRecipients == 0 {
+		return fmt.Errorf("email has no recipients (To, CC, or BCC required)")
+	}
+
+	if notification.Type != s.Type() {
+		return fmt.Errorf("notification type mismatch: expected %s, got %s", s.Type(), notification.Type)
 	}
 
 	if notification.Subject == "" {

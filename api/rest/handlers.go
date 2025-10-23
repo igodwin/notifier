@@ -8,17 +8,20 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/igodwin/notifier/internal/domain"
+	"github.com/igodwin/notifier/internal/logging"
 )
 
 // Handler handles REST API requests
 type Handler struct {
 	service domain.NotificationService
+	logger  *logging.Logger
 }
 
 // NewHandler creates a new REST handler
-func NewHandler(service domain.NotificationService) *Handler {
+func NewHandler(service domain.NotificationService, logger *logging.Logger) *Handler {
 	return &Handler{
 		service: service,
+		logger:  logger,
 	}
 }
 
@@ -26,12 +29,14 @@ func NewHandler(service domain.NotificationService) *Handler {
 func (h *Handler) SendNotification(w http.ResponseWriter, r *http.Request) {
 	var req SendNotificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Errorf("REST: Failed to decode request body - error=%v", err)
 		respondError(w, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
 
 	// Validate request
 	if err := req.Validate(); err != nil {
+		h.logger.Errorf("REST: Request validation failed - error=%v", err)
 		respondError(w, http.StatusBadRequest, "validation failed", err)
 		return
 	}
@@ -39,12 +44,22 @@ func (h *Handler) SendNotification(w http.ResponseWriter, r *http.Request) {
 	// Convert to domain notification
 	notification := req.ToNotification()
 
+	// Log incoming request
+	h.logger.Infof("REST: Received notification request - type=%s, account=%s, recipients=%d, subject=%s",
+		notification.Type, notification.Account, len(notification.Recipients), notification.Subject)
+
 	// Send notification
 	result, err := h.service.Send(r.Context(), notification)
 	if err != nil {
+		h.logger.Errorf("REST: Failed to send notification - type=%s, account=%s, error=%v",
+			notification.Type, notification.Account, err)
 		respondError(w, http.StatusInternalServerError, "failed to send notification", err)
 		return
 	}
+
+	// Log success
+	h.logger.Infof("REST: Notification queued successfully - id=%s, type=%s, recipients=%d",
+		result.NotificationID, notification.Type, len(notification.Recipients))
 
 	respondJSON(w, http.StatusAccepted, SendNotificationResponse{
 		Result: NotificationResultFromDomain(result),
@@ -55,14 +70,18 @@ func (h *Handler) SendNotification(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) SendBatchNotifications(w http.ResponseWriter, r *http.Request) {
 	var req SendBatchNotificationsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Errorf("REST: Failed to decode batch request body - error=%v", err)
 		respondError(w, http.StatusBadRequest, "invalid request body", err)
 		return
 	}
+
+	h.logger.Infof("REST: Received batch notification request - count=%d", len(req.Notifications))
 
 	// Validate and convert to domain notifications
 	notifications := make([]*domain.Notification, 0, len(req.Notifications))
 	for _, notifReq := range req.Notifications {
 		if err := notifReq.Validate(); err != nil {
+			h.logger.Errorf("REST: Batch request validation failed - error=%v", err)
 			respondError(w, http.StatusBadRequest, "validation failed", err)
 			return
 		}
@@ -72,9 +91,21 @@ func (h *Handler) SendBatchNotifications(w http.ResponseWriter, r *http.Request)
 	// Send batch
 	results, err := h.service.SendBatch(r.Context(), notifications)
 	if err != nil {
+		h.logger.Errorf("REST: Failed to send batch notifications - error=%v", err)
 		respondError(w, http.StatusInternalServerError, "failed to send batch notifications", err)
 		return
 	}
+
+	// Count successes
+	successCount := 0
+	for _, result := range results {
+		if result.Success {
+			successCount++
+		}
+	}
+
+	h.logger.Infof("REST: Batch notification completed - total=%d, successful=%d, failed=%d",
+		len(notifications), successCount, len(notifications)-successCount)
 
 	// Convert results
 	apiResults := make([]NotificationResult, 0, len(results))
@@ -164,6 +195,20 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, stats)
+}
+
+// GetNotifiers handles GET /api/v1/notifiers
+func (h *Handler) GetNotifiers(w http.ResponseWriter, r *http.Request) {
+	h.logger.Infof("REST: Received request for available notifiers")
+
+	notifiers, err := h.service.GetNotifiers(r.Context())
+	if err != nil {
+		h.logger.Errorf("REST: Failed to get notifiers - error=%v", err)
+		respondError(w, http.StatusInternalServerError, "failed to get notifiers", err)
+		return
+	}
+
+	respondJSON(w, http.StatusOK, notifiers)
 }
 
 // HealthCheck handles GET /health

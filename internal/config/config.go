@@ -268,13 +268,14 @@ func (c *Config) Sanitize() map[string]interface{} {
 		smtpAccounts := make(map[string]interface{})
 		for name, cfg := range c.Notifiers.SMTP {
 			smtpAccounts[name] = map[string]interface{}{
-				"host":     cfg.Host,
-				"port":     cfg.Port,
-				"username": cfg.Username,
-				"password": "***REDACTED***",
-				"from":     cfg.From,
-				"use_tls":  cfg.UseTLS,
-				"default":  cfg.Default,
+				"host":      cfg.Host,
+				"port":      cfg.Port,
+				"username":  cfg.Username,
+				"password":  "***REDACTED***",
+				"from":      cfg.From,
+				"from_name": cfg.FromName,
+				"use_tls":   cfg.UseTLS,
+				"default":   cfg.Default,
 			}
 		}
 		notifiers["smtp"] = smtpAccounts

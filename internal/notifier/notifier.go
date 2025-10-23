@@ -72,14 +72,16 @@ func (f *Factory) SupportedTypes() []domain.NotificationType {
 
 	typeMap := make(map[domain.NotificationType]bool)
 	for key := range f.notifiers {
-		// Extract the type from the key (type:account)
+		// Extract the type from the key (type:account or just type)
 		var notifType domain.NotificationType
-		if n, err := fmt.Sscanf(key, "%s:", &notifType); err == nil && n > 0 {
-			typeMap[notifType] = true
+		if colonIdx := findColon(key); colonIdx >= 0 {
+			// Key format: "type:account"
+			notifType = domain.NotificationType(key[:colonIdx])
 		} else {
-			// Backward compatibility: key might just be the type
-			typeMap[domain.NotificationType(key)] = true
+			// Key format: just "type" (backward compatibility)
+			notifType = domain.NotificationType(key)
 		}
+		typeMap[notifType] = true
 	}
 
 	types := make([]domain.NotificationType, 0, len(typeMap))
@@ -88,6 +90,16 @@ func (f *Factory) SupportedTypes() []domain.NotificationType {
 	}
 
 	return types
+}
+
+// findColon finds the index of ':' in a string, returns -1 if not found
+func findColon(s string) int {
+	for i, c := range s {
+		if c == ':' {
+			return i
+		}
+	}
+	return -1
 }
 
 // GetAccounts returns all registered accounts for a given notification type

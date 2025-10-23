@@ -24,6 +24,14 @@ const (
 	TypeStdout NotificationType = "stdout"
 )
 
+// ContentType defines the format of the notification body
+type ContentType string
+
+const (
+	ContentTypeText ContentType = "text"
+	ContentTypeHTML ContentType = "html"
+)
+
 // NotificationStatus represents the current state of a notification
 type NotificationStatus string
 
@@ -60,8 +68,19 @@ type Notification struct {
 	// Body is the main content of the notification
 	Body string `json:"body"`
 
+	// ContentType specifies the format of the body (text or html)
+	// Defaults to "text" if not specified. HTML is auto-detected if body starts with < or contains HTML tags.
+	ContentType ContentType `json:"content_type,omitempty"`
+
 	// Recipients contains the target addresses (email, slack channel, ntfy topic, etc.)
+	// For email: these are the "To" recipients
 	Recipients []string `json:"recipients"`
+
+	// CC contains carbon copy recipients (email only, optional)
+	CC []string `json:"cc,omitempty"`
+
+	// BCC contains blind carbon copy recipients (email only, optional)
+	BCC []string `json:"bcc,omitempty"`
 
 	// Metadata contains additional provider-specific data
 	Metadata map[string]interface{} `json:"metadata,omitempty"`

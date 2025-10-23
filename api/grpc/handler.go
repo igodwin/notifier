@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	pb "github.com/igodwin/notifier/api/grpc/pb"
 	"github.com/igodwin/notifier/internal/domain"
+	"github.com/igodwin/notifier/internal/logging"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -13,12 +15,14 @@ import (
 type NotifierHandler struct {
 	pb.UnimplementedNotifierServiceServer
 	service domain.NotificationService
+	logger  *logging.Logger
 }
 
 // NewNotifierHandler creates a new gRPC handler
-func NewNotifierHandler(svc domain.NotificationService) *NotifierHandler {
+func NewNotifierHandler(svc domain.NotificationService, logger *logging.Logger) *NotifierHandler {
 	return &NotifierHandler{
 		service: svc,
+		logger:  logger,
 	}
 }
 
@@ -36,19 +40,36 @@ func (h *NotifierHandler) HealthCheck(ctx context.Context, req *pb.HealthCheckRe
 
 // SendNotification sends a single notification
 func (h *NotifierHandler) SendNotification(ctx context.Context, req *pb.SendNotificationRequest) (*pb.SendNotificationResponse, error) {
+	// Log incoming request
+	h.logger.Infof("gRPC: Received notification request - type=%s, account=%s, recipients=%d, subject=%s",
+		req.Type, req.Account, len(req.Recipients), req.Subject)
+
 	// Convert proto notification type to domain type
 	notifType := convertProtoTypeToDomain(req.Type)
 
+	// Set default max retries if not specified
+	maxRetries := int(req.MaxRetries)
+	if maxRetries == 0 {
+		maxRetries = 3 // Default
+	}
+
+	// Convert content type, defaulting to text
+	contentType := convertProtoContentTypeToDomain(req.ContentType)
+
 	// Build notification
 	notification := &domain.Notification{
-		Type:       notifType,
-		Account:    req.Account,
-		Priority:   domain.Priority(req.Priority),
-		Subject:    req.Subject,
-		Body:       req.Body,
-		Recipients: req.Recipients,
-		Metadata:   convertStringMapToInterface(req.Metadata),
-		MaxRetries: int(req.MaxRetries),
+		ID:          uuid.New().String(),
+		Type:        notifType,
+		Account:     req.Account,
+		Priority:    domain.Priority(req.Priority),
+		Subject:     req.Subject,
+		Body:        req.Body,
+		ContentType: contentType,
+		Recipients:  req.Recipients,
+		CC:          req.Cc,
+		BCC:         req.Bcc,
+		Metadata:    convertStringMapToInterface(req.Metadata),
+		MaxRetries:  maxRetries,
 	}
 
 	if req.ScheduledFor != nil {
@@ -59,6 +80,8 @@ func (h *NotifierHandler) SendNotification(ctx context.Context, req *pb.SendNoti
 	// Send notification
 	result, err := h.service.Send(ctx, notification)
 	if err != nil {
+		h.logger.Errorf("gRPC: Failed to send notification - type=%s, account=%s, error=%v",
+			req.Type, req.Account, err)
 		return &pb.SendNotificationResponse{
 			Result: &pb.NotificationResult{
 				Success: false,
@@ -66,6 +89,10 @@ func (h *NotifierHandler) SendNotification(ctx context.Context, req *pb.SendNoti
 			},
 		}, nil
 	}
+
+	// Log success
+	h.logger.Infof("gRPC: Notification queued successfully - id=%s, type=%s, recipients=%d",
+		result.NotificationID, req.Type, len(req.Recipients))
 
 	// Convert result to proto
 	return &pb.SendNotificationResponse{
@@ -80,7 +107,10 @@ func (h *NotifierHandler) SendNotification(ctx context.Context, req *pb.SendNoti
 
 // SendBatchNotifications sends multiple notifications
 func (h *NotifierHandler) SendBatchNotifications(ctx context.Context, req *pb.SendBatchNotificationsRequest) (*pb.SendBatchNotificationsResponse, error) {
+	h.logger.Infof("gRPC: Received batch notification request - count=%d", len(req.Notifications))
+
 	var results []*pb.NotificationResult
+	successCount := 0
 
 	for _, notifReq := range req.Notifications {
 		resp, err := h.SendNotification(ctx, notifReq)
@@ -91,8 +121,14 @@ func (h *NotifierHandler) SendBatchNotifications(ctx context.Context, req *pb.Se
 			})
 		} else {
 			results = append(results, resp.Result)
+			if resp.Result.Success {
+				successCount++
+			}
 		}
 	}
+
+	h.logger.Infof("gRPC: Batch notification completed - total=%d, successful=%d, failed=%d",
+		len(req.Notifications), successCount, len(req.Notifications)-successCount)
 
 	return &pb.SendBatchNotificationsResponse{
 		Results: results,
@@ -187,6 +223,31 @@ func (h *NotifierHandler) GetStats(ctx context.Context, req *pb.GetStatsRequest)
 	}, nil
 }
 
+// GetNotifiers returns information about available notifiers
+func (h *NotifierHandler) GetNotifiers(ctx context.Context, req *pb.GetNotifiersRequest) (*pb.GetNotifiersResponse, error) {
+	h.logger.Infof("gRPC: Received request for available notifiers")
+
+	notifiers, err := h.service.GetNotifiers(ctx)
+	if err != nil {
+		h.logger.Errorf("gRPC: Failed to get notifiers - error=%v", err)
+		return nil, err
+	}
+
+	// Convert domain notifiers to proto notifiers
+	protoNotifiers := make([]*pb.NotifierInfo, 0, len(notifiers.Notifiers))
+	for _, notifier := range notifiers.Notifiers {
+		protoNotifiers = append(protoNotifiers, &pb.NotifierInfo{
+			Type:           convertDomainTypeToProto(notifier.Type),
+			Accounts:       notifier.Accounts,
+			DefaultAccount: notifier.DefaultAccount,
+		})
+	}
+
+	return &pb.GetNotifiersResponse{
+		Notifiers: protoNotifiers,
+	}, nil
+}
+
 // Helper functions to convert between proto and domain types
 
 // convertStringMapToInterface converts proto's map[string]string to domain's map[string]interface{}
@@ -227,6 +288,43 @@ func convertProtoTypeToDomain(protoType pb.NotificationType) domain.Notification
 		return domain.TypeStdout
 	default:
 		return domain.TypeStdout
+	}
+}
+
+func convertDomainTypeToProto(domainType domain.NotificationType) pb.NotificationType {
+	switch domainType {
+	case domain.TypeEmail:
+		return pb.NotificationType_NOTIFICATION_TYPE_EMAIL
+	case domain.TypeSlack:
+		return pb.NotificationType_NOTIFICATION_TYPE_SLACK
+	case domain.TypeNtfy:
+		return pb.NotificationType_NOTIFICATION_TYPE_NTFY
+	case domain.TypeStdout:
+		return pb.NotificationType_NOTIFICATION_TYPE_STDOUT
+	default:
+		return pb.NotificationType_NOTIFICATION_TYPE_UNSPECIFIED
+	}
+}
+
+func convertProtoContentTypeToDomain(protoType pb.ContentType) domain.ContentType {
+	switch protoType {
+	case pb.ContentType_CONTENT_TYPE_HTML:
+		return domain.ContentTypeHTML
+	case pb.ContentType_CONTENT_TYPE_TEXT:
+		return domain.ContentTypeText
+	default:
+		return domain.ContentTypeText // Default to text
+	}
+}
+
+func convertDomainContentTypeToProto(domainType domain.ContentType) pb.ContentType {
+	switch domainType {
+	case domain.ContentTypeHTML:
+		return pb.ContentType_CONTENT_TYPE_HTML
+	case domain.ContentTypeText:
+		return pb.ContentType_CONTENT_TYPE_TEXT
+	default:
+		return pb.ContentType_CONTENT_TYPE_TEXT
 	}
 }
 

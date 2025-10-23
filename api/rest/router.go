@@ -5,11 +5,12 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/igodwin/notifier/internal/domain"
+	"github.com/igodwin/notifier/internal/logging"
 )
 
 // NewRouter creates a new HTTP router with all routes configured
-func NewRouter(service domain.NotificationService) *mux.Router {
-	handler := NewHandler(service)
+func NewRouter(service domain.NotificationService, logger *logging.Logger) *mux.Router {
+	handler := NewHandler(service, logger)
 	router := mux.NewRouter()
 
 	// API v1 routes
@@ -25,6 +26,9 @@ func NewRouter(service domain.NotificationService) *mux.Router {
 
 	// Stats route
 	v1.HandleFunc("/stats", handler.GetStats).Methods(http.MethodGet)
+
+	// Notifiers route
+	v1.HandleFunc("/notifiers", handler.GetNotifiers).Methods(http.MethodGet)
 
 	// Health check route
 	router.HandleFunc("/health", handler.HealthCheck).Methods(http.MethodGet)

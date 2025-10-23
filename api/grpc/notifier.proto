@@ -29,6 +29,9 @@ service NotifierService {
   // GetStats returns notification statistics
   rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
 
+  // GetNotifiers returns information about available notifiers
+  rpc GetNotifiers(GetNotifiersRequest) returns (GetNotifiersResponse);
+
   // HealthCheck verifies the service is operational
   rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
 }
@@ -51,6 +54,13 @@ enum Priority {
   PRIORITY_CRITICAL = 4;
 }
 
+// ContentType defines the format of the notification body
+enum ContentType {
+  CONTENT_TYPE_UNSPECIFIED = 0;
+  CONTENT_TYPE_TEXT = 1;
+  CONTENT_TYPE_HTML = 2;
+}
+
 // NotificationStatus represents the state of a notification
 enum NotificationStatus {
   NOTIFICATION_STATUS_UNSPECIFIED = 0;
@@ -71,7 +81,10 @@ message Notification {
   NotificationStatus status = 5;
   string subject = 6;
   string body = 7;
+  ContentType content_type = 18; // Format of the body (text or html)
   repeated string recipients = 8;
+  repeated string cc = 16; // Carbon copy recipients (email only)
+  repeated string bcc = 17; // Blind carbon copy recipients (email only)
   map<string, string> metadata = 9;
   google.protobuf.Timestamp created_at = 10;
   google.protobuf.Timestamp scheduled_for = 11;
@@ -98,7 +111,10 @@ message SendNotificationRequest {
   Priority priority = 3;
   string subject = 4;
   string body = 5;
+  ContentType content_type = 12; // Format of the body (text or html) - auto-detected if not specified
   repeated string recipients = 6;
+  repeated string cc = 10; // Carbon copy recipients (email only)
+  repeated string bcc = 11; // Blind carbon copy recipients (email only)
   map<string, string> metadata = 7;
   google.protobuf.Timestamp scheduled_for = 8;
   int32 max_retries = 9;
@@ -185,6 +201,21 @@ message GetStatsResponse {
   map<string, int64> by_type = 5;
   map<string, int64> by_status = 6;
   double average_latency_ms = 7;
+}
+
+// GetNotifiersRequest requests available notifiers
+message GetNotifiersRequest {}
+
+// NotifierInfo contains information about a configured notifier type
+message NotifierInfo {
+  NotificationType type = 1;
+  repeated string accounts = 2;
+  string default_account = 3;
+}
+
+// GetNotifiersResponse returns available notifiers
+message GetNotifiersResponse {
+  repeated NotifierInfo notifiers = 1;
 }
 
 // HealthCheckRequest requests health status
