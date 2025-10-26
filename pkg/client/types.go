@@ -96,5 +96,7 @@ type ClientConfig struct {
 	Timeout      time.Duration // Request timeout (default: 30s)
 	MaxRetries   int           // Max retries on failure (default: 3)
 	RetryBackoff time.Duration // Backoff between retries (default: 100ms)
-	TLSInsecure  bool          // Disable TLS verification (for testing only)
+	// TLSInsecure disables TLS verification - ONLY for testing with self-signed certs in dev/test environments
+	// NEVER set this to true in production. Use proper certificates or provide custom CA certificates instead.
+	TLSInsecure bool
 }

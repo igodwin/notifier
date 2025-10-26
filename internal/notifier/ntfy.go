@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/igodwin/notifier/internal/domain"
@@ -30,8 +32,10 @@ type NtfyConfig struct {
 	// DefaultTopic is the default topic if not specified in notification
 	DefaultTopic string `mapstructure:"default_topic"`
 
-	// InsecureSkipVerify skips TLS verification (for self-hosted servers with self-signed certs)
-	InsecureSkipVerify bool `mapstructure:"insecure_skip_verify"`
+	// CACertPath is the path to a custom CA certificate file (optional, PEM format)
+	// Use this only for self-hosted ntfy servers with self-signed certificates.
+	// If not specified, system default CA certificates are used.
+	CACertPath string `mapstructure:"ca_cert_path"`
 
 	// Default marks this instance as default
 	Default bool `mapstructure:"default"`
@@ -81,17 +85,15 @@ func NewNtfyNotifier(config *NtfyConfig) (*NtfyNotifier, error) {
 		config.ServerURL = "https://ntfy.sh" // Default public ntfy server
 	}
 
-	// Create HTTP client with optional TLS skip verify
-	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
+	// Validate CA certificate path if provided
+	if err := validateCACertPath(config.CACertPath); err != nil {
+		return nil, err
 	}
 
-	if config.InsecureSkipVerify {
-		// For self-hosted servers with self-signed certificates
-		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		httpClient.Transport = transport
+	// Create HTTP client with proper TLS configuration
+	httpClient, err := createNtfyHTTPClient(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
 	return &NtfyNotifier{
@@ -100,6 +102,82 @@ func NewNtfyNotifier(config *NtfyConfig) (*NtfyNotifier, error) {
 		},
 		config:     config,
 		httpClient: httpClient,
+	}, nil
+}
+
+// validateCACertPath validates that the CA certificate path exists and is readable
+func validateCACertPath(caCertPath string) error {
+	if caCertPath == "" {
+		// CA cert path is optional
+		return nil
+	}
+
+	// Check if file exists
+	info, err := os.Stat(caCertPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("CA certificate file not found: %s", caCertPath)
+		}
+		return fmt.Errorf("CA certificate file error: %w", err)
+	}
+
+	// Check if it's a regular file
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("CA certificate path is not a regular file: %s", caCertPath)
+	}
+
+	// Try to read and parse the certificate
+	certData, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return fmt.Errorf("failed to read CA certificate file: %w", err)
+	}
+
+	// Verify it's valid PEM format
+	if !isPEMCertificate(certData) {
+		return fmt.Errorf("CA certificate file is not in valid PEM format: %s", caCertPath)
+	}
+
+	return nil
+}
+
+// isPEMCertificate checks if the data is a valid PEM certificate
+func isPEMCertificate(data []byte) bool {
+	// Try to parse as PEM format
+	roots := x509.NewCertPool()
+	return roots.AppendCertsFromPEM(data)
+}
+
+// createNtfyHTTPClient creates an HTTP client with proper TLS configuration
+func createNtfyHTTPClient(config *NtfyConfig) (*http.Client, error) {
+	tlsConfig := &tls.Config{
+		// Require TLS verification (default Go behavior, never skip)
+		// InsecureSkipVerify is explicitly NOT set, ensuring verification is always on
+		MinVersion: tls.VersionTLS12,
+	}
+
+	// Load custom CA certificate if provided
+	if config.CACertPath != "" {
+		certData, err := os.ReadFile(config.CACertPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read custom CA certificate: %w", err)
+		}
+
+		certPool := x509.NewCertPool()
+		if !certPool.AppendCertsFromPEM(certData) {
+			return nil, fmt.Errorf("failed to parse custom CA certificate as PEM")
+		}
+
+		tlsConfig.RootCAs = certPool
+	}
+	// If RootCAs is not set, the default system CA pool will be used
+
+	transport := &http.Transport{
+		TLSClientConfig: tlsConfig,
+	}
+
+	return &http.Client{
+		Timeout:   30 * time.Second,
+		Transport: transport,
 	}, nil
 }
 
