@@ -15,12 +15,14 @@ import (
 	grpcapi "github.com/igodwin/notifier/api/grpc"
 	pb "github.com/igodwin/notifier/api/grpc/pb"
 	"github.com/igodwin/notifier/api/rest"
+	"github.com/igodwin/notifier/internal/auth"
 	"github.com/igodwin/notifier/internal/config"
 	"github.com/igodwin/notifier/internal/domain"
 	"github.com/igodwin/notifier/internal/logging"
 	"github.com/igodwin/notifier/internal/notifier"
 	"github.com/igodwin/notifier/internal/queue"
 	"github.com/igodwin/notifier/internal/service"
+	"github.com/gorilla/mux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -105,6 +107,18 @@ func main() {
 	}
 	logger.Infof("Started %d worker(s)", cfg.Queue.WorkerCount)
 
+	// Initialize authentication if enabled
+	var authStore *auth.APIKeyStore
+	var authz *auth.NotifierAuthz
+	if cfg.Auth.Enabled {
+		authStore = auth.NewAPIKeyStore()
+		authz = auth.NewNotifierAuthz()
+		logger.Info("API authentication enabled")
+
+		// Register authorization rules for notifiers
+		registerAuthorizationRules(cfg, authz, logger)
+	}
+
 	// Wait group for both servers
 	var wg sync.WaitGroup
 
@@ -112,14 +126,14 @@ func main() {
 	var grpcServer *grpc.Server
 	if cfg.Server.Mode == "both" || cfg.Server.Mode == "grpc" {
 		wg.Add(1)
-		grpcServer = startGRPCServer(ctx, &wg, cfg, svc, logger)
+		grpcServer = startGRPCServer(ctx, &wg, cfg, svc, logger, authStore)
 	}
 
 	// Start REST server if enabled
 	var restServer *http.Server
 	if cfg.Server.Mode == "both" || cfg.Server.Mode == "rest" {
 		wg.Add(1)
-		restServer = startRESTServer(ctx, &wg, cfg, svc, logger)
+		restServer = startRESTServer(ctx, &wg, cfg, svc, logger, authStore)
 	}
 
 	// Wait for interrupt signal
@@ -217,7 +231,7 @@ func registerNotifiers(cfg *config.Config, factory *notifier.Factory, logger *lo
 	}
 }
 
-func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger) *grpc.Server {
+func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore) *grpc.Server {
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.GRPCPort)
 
 	lis, err := net.Listen("tcp", addr)
@@ -225,7 +239,19 @@ func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 		logger.Fatalf("Failed to listen on %s: %v", addr, err)
 	}
 
-	grpcServer := grpc.NewServer()
+	// Create gRPC server options
+	var serverOpts []grpc.ServerOption
+
+	// Add authentication interceptors if enabled
+	if authStore != nil {
+		authMiddleware := auth.NewGRPCAuthMiddleware(authStore, logger)
+		serverOpts = append(serverOpts,
+			grpc.UnaryInterceptor(authMiddleware.UnaryInterceptor()),
+			grpc.StreamInterceptor(authMiddleware.StreamInterceptor()),
+		)
+	}
+
+	grpcServer := grpc.NewServer(serverOpts...)
 
 	// Create and register gRPC handler
 	grpcHandler := grpcapi.NewNotifierHandler(svc, logger)
@@ -247,8 +273,13 @@ func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 	return grpcServer
 }
 
-func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger) *http.Server {
-	router := rest.NewRouter(svc, logger)
+func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore) *http.Server {
+	var router *mux.Router
+	if authStore != nil {
+		router = rest.NewRouterWithAuth(svc, logger, authStore)
+	} else {
+		router = rest.NewRouter(svc, logger)
+	}
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.RESTPort)
 	server := &http.Server{
@@ -268,6 +299,32 @@ func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 	}()
 
 	return server
+}
+
+func registerAuthorizationRules(cfg *config.Config, authz *auth.NotifierAuthz, logger *logging.Logger) {
+	// Register SMTP authorization rules
+	for accountName, smtpConfig := range cfg.Notifiers.SMTP {
+		if len(smtpConfig.AllowedRoles) > 0 {
+			authz.RegisterRule(domain.TypeEmail, accountName, smtpConfig.AllowedRoles)
+			logger.Infof("Registered auth rule for SMTP account '%s' - allowed roles: %v", accountName, smtpConfig.AllowedRoles)
+		}
+	}
+
+	// Register Slack authorization rules
+	for accountName, slackConfig := range cfg.Notifiers.Slack {
+		if len(slackConfig.AllowedRoles) > 0 {
+			authz.RegisterRule(domain.TypeSlack, accountName, slackConfig.AllowedRoles)
+			logger.Infof("Registered auth rule for Slack account '%s' - allowed roles: %v", accountName, slackConfig.AllowedRoles)
+		}
+	}
+
+	// Register Ntfy authorization rules
+	for accountName, ntfyConfig := range cfg.Notifiers.Ntfy {
+		if len(ntfyConfig.AllowedRoles) > 0 {
+			authz.RegisterRule(domain.TypeNtfy, accountName, ntfyConfig.AllowedRoles)
+			logger.Infof("Registered auth rule for Ntfy account '%s' - allowed roles: %v", accountName, ntfyConfig.AllowedRoles)
+		}
+	}
 }
 
 func getDefaultConfig() *config.Config {

@@ -35,6 +35,9 @@ type NtfyConfig struct {
 
 	// Default marks this instance as default
 	Default bool `mapstructure:"default"`
+
+	// AllowedRoles are roles allowed to use this notifier (empty = all authenticated)
+	AllowedRoles []string `mapstructure:"allowed_roles"`
 }
 
 // NtfyNotifier sends notifications via ntfy.sh

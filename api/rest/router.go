@@ -4,17 +4,29 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
+	"github.com/igodwin/notifier/internal/auth"
 	"github.com/igodwin/notifier/internal/domain"
 	"github.com/igodwin/notifier/internal/logging"
 )
 
 // NewRouter creates a new HTTP router with all routes configured
 func NewRouter(service domain.NotificationService, logger *logging.Logger) *mux.Router {
+	return NewRouterWithAuth(service, logger, nil)
+}
+
+// NewRouterWithAuth creates a new HTTP router with optional authentication
+func NewRouterWithAuth(service domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore) *mux.Router {
 	handler := NewHandler(service, logger)
 	router := mux.NewRouter()
 
 	// API v1 routes
 	v1 := router.PathPrefix("/api/v1").Subrouter()
+
+	// Apply authentication middleware if auth store is provided
+	if authStore != nil {
+		authMiddleware := auth.NewRESTAuthMiddleware(authStore, logger)
+		v1.Use(authMiddleware.Middleware)
+	}
 
 	// Notification routes
 	v1.HandleFunc("/notifications", handler.SendNotification).Methods(http.MethodPost)
@@ -30,7 +42,7 @@ func NewRouter(service domain.NotificationService, logger *logging.Logger) *mux.
 	// Notifiers route
 	v1.HandleFunc("/notifiers", handler.GetNotifiers).Methods(http.MethodGet)
 
-	// Health check route
+	// Health check route (no auth required)
 	router.HandleFunc("/health", handler.HealthCheck).Methods(http.MethodGet)
 
 	// Middleware

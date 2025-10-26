@@ -13,13 +13,14 @@ import (
 
 // SlackConfig contains Slack webhook configuration
 type SlackConfig struct {
-	WebhookURL string            `mapstructure:"webhook_url"`
-	Token      string            `mapstructure:"token"`
-	Channel    string            `mapstructure:"channel"`
-	Username   string            `mapstructure:"username"`
-	IconEmoji  string            `mapstructure:"icon_emoji"`
-	Webhooks   map[string]string `mapstructure:"webhooks"` // Channel-specific webhooks
-	Default    bool              `mapstructure:"default"`  // Mark this instance as default
+	WebhookURL   string            `mapstructure:"webhook_url"`
+	Token        string            `mapstructure:"token"`
+	Channel      string            `mapstructure:"channel"`
+	Username     string            `mapstructure:"username"`
+	IconEmoji    string            `mapstructure:"icon_emoji"`
+	Webhooks     map[string]string `mapstructure:"webhooks"` // Channel-specific webhooks
+	Default      bool              `mapstructure:"default"`  // Mark this instance as default
+	AllowedRoles []string          `mapstructure:"allowed_roles"`  // Roles allowed to use this notifier (empty = all authenticated)
 }
 
 // SlackNotifier sends notifications to Slack

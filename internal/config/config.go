@@ -19,6 +19,7 @@ type Config struct {
 	Logging     LoggingConfig      `mapstructure:"logging"`
 	Metrics     MetricsConfig      `mapstructure:"metrics"`
 	HealthCheck HealthCheckConfig  `mapstructure:"health_check"`
+	Auth        AuthConfig         `mapstructure:"auth"`
 	ConfigFile  string             `mapstructure:"-"` // Path to config file used (not from config)
 }
 
@@ -59,6 +60,12 @@ type HealthCheckConfig struct {
 	Port     int    `mapstructure:"port"`
 	Path     string `mapstructure:"path"`
 	Interval int    `mapstructure:"interval"` // seconds
+}
+
+// AuthConfig contains authentication and authorization configuration
+type AuthConfig struct {
+	Enabled       bool                  `mapstructure:"enabled"`        // Enable API key authentication
+	DefaultRateLimit int                `mapstructure:"default_rate_limit"` // Default rate limit in requests/minute (0 = unlimited)
 }
 
 // Load loads configuration from file and environment variables
@@ -160,6 +167,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("health_check.port", 8081)
 	v.SetDefault("health_check.path", "/health")
 	v.SetDefault("health_check.interval", 30)
+
+	// Auth defaults
+	v.SetDefault("auth.enabled", false) // Authentication disabled by default
+	v.SetDefault("auth.default_rate_limit", 100) // 100 requests per minute default
 
 	// Notifier defaults
 	v.SetDefault("notifiers.stdout", true)
