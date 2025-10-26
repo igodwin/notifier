@@ -87,6 +87,15 @@ func main() {
 		logger.Fatalf("Queue type %s not implemented yet", cfg.Queue.Type)
 	}
 
+	// Initialize authentication if enabled (must be before service creation for RBAC)
+	var authStore *auth.APIKeyStore
+	var authz *auth.NotifierAuthz
+	if cfg.Auth.Enabled {
+		authStore = auth.NewAPIKeyStore()
+		authz = auth.NewNotifierAuthz()
+		logger.Info("API authentication enabled")
+	}
+
 	// Initialize notifier factory and register notifiers
 	factory := notifier.NewFactory()
 	registerNotifiers(cfg, factory, logger)
@@ -98,8 +107,13 @@ func main() {
 
 	logger.Infof("Supported notification types: %v", factory.SupportedTypes())
 
-	// Create notification service (pass config as account resolver)
-	svc := service.NewNotificationService(factory, q, cfg.Queue.WorkerCount, cfg, logger)
+	// Register authorization rules for notifiers (after factory registration)
+	if authz != nil {
+		registerAuthorizationRules(cfg, authz, logger)
+	}
+
+	// Create notification service (pass config as account resolver and authz for RBAC)
+	svc := service.NewNotificationService(factory, q, cfg.Queue.WorkerCount, cfg, authz, logger)
 
 	// Configure notification retention if enabled
 	if err := svc.WithRetentionConfig(cfg.Retention); err != nil {
@@ -116,18 +130,6 @@ func main() {
 		logger.Fatalf("Failed to start service: %v", err)
 	}
 	logger.Infof("Started %d worker(s)", cfg.Queue.WorkerCount)
-
-	// Initialize authentication if enabled
-	var authStore *auth.APIKeyStore
-	var authz *auth.NotifierAuthz
-	if cfg.Auth.Enabled {
-		authStore = auth.NewAPIKeyStore()
-		authz = auth.NewNotifierAuthz()
-		logger.Info("API authentication enabled")
-
-		// Register authorization rules for notifiers
-		registerAuthorizationRules(cfg, authz, logger)
-	}
 
 	// Wait group for both servers
 	var wg sync.WaitGroup

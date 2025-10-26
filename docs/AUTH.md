@@ -12,46 +12,170 @@ The Notifier service includes:
 
 ## Enabling Authentication
 
-Authentication is **disabled by default**. To enable it, set in your configuration file:
+Authentication is **disabled by default**. To enable it, you need:
+
+1. **PostgreSQL database** for persistent key storage
+2. **Auth configuration** in your config file
+
+### Configuration
+
+Add to your configuration file:
 
 ```yaml
 auth:
   enabled: true
   default_rate_limit: 100  # requests per minute, 0 = unlimited
+  database:
+    url: "postgresql://user:password@localhost:5432/notifier"
 ```
 
-Or via environment variable:
+Or via environment variables:
 
 ```bash
-NOTIFIER_AUTH_ENABLED=true
-NOTIFIER_AUTH_DEFAULT_RATE_LIMIT=100
+export NOTIFIER_AUTH_ENABLED=true
+export NOTIFIER_AUTH_DEFAULT_RATE_LIMIT=100
+export NOTIFIER_AUTH_DATABASE_URL="postgresql://user:password@localhost:5432/notifier"
+```
+
+### Database Setup
+
+The database schema is automatically created on first connection. You only need to:
+
+1. Create a PostgreSQL database (e.g., `notifier`)
+2. Provide database URL in configuration
+3. The service will create required tables:
+   - `api_keys` - Stores API key metadata
+   - `api_key_audit_log` - Tracks all key operations
+
+**Example**: Creating a PostgreSQL database
+```bash
+createdb notifier
+# Or via SQL:
+# CREATE DATABASE notifier;
 ```
 
 ## Creating API Keys
 
-API keys can be created programmatically. Here's an example:
+API keys are created via the REST API once you have an admin key. The system uses a hybrid architecture with persistent PostgreSQL storage and in-memory cache for performance.
+
+### Step 1: Bootstrap (Initial Setup)
+
+On first deployment, create an initial admin key via environment variables:
+
+```bash
+export NOTIFIER_AUTH_ENABLED=true
+export NOTIFIER_BOOTSTRAP_ADMIN_KEY=true
+export NOTIFIER_AUTH_DATABASE_URL="postgresql://user:password@localhost:5432/notifier"
+
+./notifier serve
+
+# Output:
+# ============================================================
+# NOTIFIER BOOTSTRAP: ADMIN KEY CREATED
+# ============================================================
+# Key: nk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+# Save this key in a secure location.
+# ============================================================
+```
+
+**Important**: Save the admin key securely. You won't be able to see it again.
+
+### Step 2: Create Additional Keys
+
+Use the admin key to create keys for your services via REST API:
+
+```bash
+ADMIN_KEY="nk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+
+# Create a key for your billing service
+curl -X POST http://localhost:8080/api/v1/admin/keys \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "billing-service",
+    "roles": ["notify-email", "notify-slack"],
+    "rate_limit": 1000,
+    "expires_in": "8760h"
+  }'
+```
+
+**Response**:
+```json
+{
+  "key": "nk_b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1",
+  "name": "billing-service-1698297600",
+  "client_id": "billing-service",
+  "roles": ["notify-email", "notify-slack"],
+  "created_at": "2024-10-26T12:00:00Z",
+  "rate_limit": 1000
+}
+```
+
+### Step 3: Store Key Securely
+
+Store the returned key in a secure location:
+
+```bash
+echo "$BILLING_KEY" > ~/.billing-notifier-key
+chmod 600 ~/.billing-notifier-key
+```
+
+### Database Persistence
+
+Keys are automatically persisted to PostgreSQL database specified in configuration:
+
+```yaml
+auth:
+  enabled: true
+  database:
+    url: "postgresql://user:password@localhost:5432/notifier"
+```
+
+The system automatically creates the required schema:
+- `api_keys` table - Stores key metadata
+- `api_key_audit_log` table - Tracks all key operations
+
+### Programmatic Creation (Go)
+
+If you need to create keys programmatically in Go code:
 
 ```go
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 	"github.com/igodwin/notifier/internal/auth"
 )
 
 func main() {
-	// Create a new key store
-	store := auth.NewAPIKeyStore()
+	// Create database backend
+	dbStore, err := auth.NewKeyStoreDB("postgresql://user:password@localhost:5432/notifier")
+	if err != nil {
+		panic(err)
+	}
+	defer dbStore.Close()
+
+	// Create hybrid key store (memory cache + database backend)
+	cache := auth.NewAPIKeyStore()
+	keyStore := auth.NewHybridKeyStore(cache, dbStore)
+
+	// Load existing keys from database
+	ctx := context.Background()
+	if err := keyStore.InitializeFromDatabase(ctx); err != nil {
+		panic(err)
+	}
 
 	// Create an API key for a client
-	// Parameters: clientID, roles, rateLimit (req/min), expiresIn (optional)
 	expiresIn := 30 * 24 * time.Hour  // 30 days
-	key, err := store.CreateKey(
-		"billing-service",                    // Client ID
+	key, err := keyStore.CreateKey(
+		ctx,
+		"billing-service",                        // Client ID
 		[]string{"notify-email", "notify-slack"}, // Roles
-		100,                                  // Rate limit: 100 requests/minute
-		&expiresIn,                          // Expires in 30 days
+		1000,                                      // Rate limit: 1000 req/min
+		&expiresIn,                               // Expires in 30 days
+		"admin",                                   // Who created it
 	)
 	if err != nil {
 		panic(err)
@@ -64,11 +188,82 @@ func main() {
 	fmt.Printf("Expires At: %v\n", key.ExpiresAt)
 
 	// Example output:
-	// API Key: nk_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0
+	// API Key: nk_b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1
 	// Client ID: billing-service
 	// Roles: [notify-email notify-slack]
-	// Rate Limit: 100 req/min
+	// Rate Limit: 1000 req/min
 	// Expires At: 2025-11-24 10:30:00 +0000 UTC
+}
+```
+
+### Managing API Keys
+
+Once created, you can list, revoke, and audit keys via REST API:
+
+#### List Your Keys
+
+```bash
+curl -X GET http://localhost:8080/api/v1/admin/keys \
+  -H "Authorization: Bearer $YOUR_KEY"
+```
+
+**Response**:
+```json
+{
+  "keys": [
+    {
+      "key_preview": "nk_o5p6",
+      "name": "billing-service-1698297600",
+      "client_id": "billing-service",
+      "roles": ["notify-email", "notify-slack"],
+      "created_at": "2024-10-26T12:00:00Z",
+      "last_used_at": "2024-10-26T15:30:00Z",
+      "expires_at": "2025-10-26T12:00:00Z",
+      "is_active": true,
+      "rate_limit": 1000
+    }
+  ]
+}
+```
+
+Note: Only the last 4 characters of keys are shown for security.
+
+#### Revoke a Key
+
+```bash
+curl -X DELETE http://localhost:8080/api/v1/admin/keys/nk_key_to_revoke \
+  -H "Authorization: Bearer $ADMIN_KEY"
+```
+
+Returns: `204 No Content` on success.
+
+#### View Audit Log
+
+```bash
+curl -X GET http://localhost:8080/api/v1/admin/keys/nk_key/audit \
+  -H "Authorization: Bearer $ADMIN_KEY"
+```
+
+**Response**:
+```json
+{
+  "key_preview": "nk_o5p6",
+  "audit_log": [
+    {
+      "action": "created",
+      "performed_by": "admin-bootstrap",
+      "performed_at": "2024-10-26T12:00:00Z",
+      "details": {
+        "client_id": "billing-service",
+        "roles": ["notify-email", "notify-slack"]
+      }
+    },
+    {
+      "action": "deactivated",
+      "performed_by": "admin-user",
+      "performed_at": "2024-10-26T14:30:00Z"
+    }
+  ]
 }
 ```
 
@@ -78,6 +273,7 @@ Generated API keys follow the format: `nk_<32-hex-characters>`
 
 - `nk_` prefix identifies it as a Notifier API key
 - The hex string is cryptographically secure random
+- Keys use cryptographically secure random number generation
 
 ### Key Properties
 
@@ -615,9 +811,38 @@ Monitor these logs for:
 ## Summary
 
 1. **Enable auth** in config: `auth.enabled: true`
-2. **Create API keys** with appropriate roles and rate limits
-3. **Configure role-based access** for each notifier
-4. **Use environment variables** or secrets manager for key storage
-5. **Monitor logs** for security events
-6. **Rotate keys regularly** and set expiration dates
-7. **Use separate keys** for each service/application
+2. **Bootstrap admin key** on first deployment
+3. **Create API keys** via REST API with appropriate roles and rate limits
+4. **Configure role-based access** for each notifier
+5. **Use environment variables** or secrets manager for key storage
+6. **Monitor logs** and audit trails for security events
+7. **Rotate keys regularly** and set expiration dates
+8. **Use separate keys** for each service/application
+
+## Related Documentation
+
+For more detailed information on specific topics:
+
+- **[KEY_MANAGEMENT.md](./KEY_MANAGEMENT.md)** - Complete guide to API key management
+  - Bootstrap mechanism
+  - Key creation via REST API
+  - Key listing, revocation, and rotation
+  - Audit logging
+  - Database persistence
+  - Kubernetes deployment
+
+- **[RBAC.md](./RBAC.md)** - Role-Based Access Control (RBAC) guide
+  - Configuration patterns
+  - Authorization flow
+  - Restricting notifier access by role
+  - Testing authorization
+  - Security best practices
+
+- **[RBAC_QUICKSTART.md](./RBAC_QUICKSTART.md)** - RBAC quick reference
+  - 60-second overview
+  - Common patterns
+  - Troubleshooting
+
+- **[AUTH_QUICK_START.md](./AUTH_QUICK_START.md)** - Quick start guide
+  - Step-by-step setup
+  - Basic examples

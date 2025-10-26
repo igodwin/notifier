@@ -76,31 +76,88 @@ notifiers:
 ```yaml
 notifiers:
   ntfy:
-    # Server URL (default: https://ntfy.sh)
-    server_url: "https://ntfy.sh"
+    # Single instance configuration
+    public:
+      # Server URL (default: https://ntfy.sh)
+      server_url: "https://ntfy.sh"
 
-    # Authentication (choose one method)
-    token: "tk_your_token"              # Token auth (recommended)
-    # username: "user"                  # Or basic auth
-    # password: "pass"
+      # Authentication (choose one method)
+      token: "tk_your_token"              # Token auth (recommended)
+      # username: "user"                  # Or basic auth
+      # password: "pass"
 
-    # Optional: default topic if not specified in notification
-    default_topic: "my-default-topic"
+      # Optional: default topic if not specified in notification
+      default_topic: "my-default-topic"
 
-    # Optional: skip TLS verification (for self-hosted with self-signed certs)
-    insecure_skip_verify: false
+      # Mark this instance as default (used when no account specified)
+      default: true
+
+      # Optional: roles allowed to use this notifier (empty = all authenticated users)
+      # allowed_roles:
+      #   - "admin"
+      #   - "devops"
 ```
 
-### Self-Hosted Ntfy Server
+### Multiple Named Instances
 
 ```yaml
 notifiers:
   ntfy:
-    server_url: "https://ntfy.yourcompany.com"
-    token: "your_custom_token"
-    # For self-signed certificates
-    insecure_skip_verify: true
+    # Public ntfy.sh instance
+    public:
+      server_url: "https://ntfy.sh"
+      token: "tk_your_access_token"
+      default_topic: "my-public-topic"
+      default: true
+
+    # Private self-hosted instance
+    private:
+      server_url: "https://ntfy.mycompany.com"
+      username: "your-username"
+      password: "your-password"
+      default_topic: "internal-notifications"
+      ca_cert_path: "/etc/notifier/certs/ca.pem"
+      allowed_roles:
+        - "admin"
+        - "devops"
 ```
+
+### Self-Hosted Ntfy Server with Custom CA
+
+For self-hosted ntfy servers with self-signed certificates:
+
+```yaml
+notifiers:
+  ntfy:
+    private:
+      server_url: "https://ntfy.yourcompany.com"
+      token: "your_custom_token"
+      # Path to custom CA certificate (PEM format)
+      ca_cert_path: "/etc/notifier/certs/ca.pem"
+```
+
+**Important**: TLS verification is always enforced. Use `ca_cert_path` to trust custom CA certificates. The `ca_cert_path` must:
+- Point to a valid PEM-formatted certificate file
+- Be readable by the notifier process
+- Be the root or intermediate CA certificate (not end-entity certificate)
+
+## Configuration Fields Reference
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `server_url` | string | No | `https://ntfy.sh` | The ntfy server URL (public or self-hosted) |
+| `token` | string | No | (none) | Bearer token for authentication. Preferred over username/password. |
+| `username` | string | No | (none) | Username for basic authentication (alternative to token) |
+| `password` | string | No | (none) | Password for basic authentication (used with username) |
+| `default_topic` | string | No | (none) | Default topic to use if not specified in the notification |
+| `ca_cert_path` | string | No | (none) | Path to custom CA certificate file (PEM format) for self-hosted servers |
+| `default` | boolean | No | `false` | If true, this instance is used when no account is specified |
+| `allowed_roles` | string array | No | (none) | Roles allowed to use this notifier. Empty means all authenticated users. |
+
+**Authentication Priority**:
+1. Token (if provided)
+2. Username + Password (if provided)
+3. No authentication (for public topics)
 
 ## Sending Notifications
 
@@ -358,14 +415,23 @@ ntfy subscribe mytopic
 
 ## Environment Variables
 
-Override configuration with environment variables:
+Override configuration with environment variables using the instance name in the path:
 
 ```bash
-export NOTIFIER_NOTIFIERS_NTFY_SERVER_URL=https://ntfy.yourcompany.com
-export NOTIFIER_NOTIFIERS_NTFY_TOKEN=tk_your_token
-export NOTIFIER_NOTIFIERS_NTFY_DEFAULT_TOPIC=default-topic
-export NOTIFIER_NOTIFIERS_NTFY_INSECURE_SKIP_VERIFY=false
+# Public instance (ntfy.sh)
+export NOTIFIER_NOTIFIERS_NTFY_PUBLIC_SERVER_URL=https://ntfy.sh
+export NOTIFIER_NOTIFIERS_NTFY_PUBLIC_TOKEN=tk_your_access_token
+export NOTIFIER_NOTIFIERS_NTFY_PUBLIC_DEFAULT_TOPIC=my-topic
+
+# Private instance (self-hosted)
+export NOTIFIER_NOTIFIERS_NTFY_PRIVATE_SERVER_URL=https://ntfy.mycompany.com
+export NOTIFIER_NOTIFIERS_NTFY_PRIVATE_USERNAME=your-username
+export NOTIFIER_NOTIFIERS_NTFY_PRIVATE_PASSWORD=your-password
+export NOTIFIER_NOTIFIERS_NTFY_PRIVATE_CA_CERT_PATH=/etc/notifier/certs/ca.pem
+export NOTIFIER_NOTIFIERS_NTFY_PRIVATE_DEFAULT_TOPIC=internal-topic
 ```
+
+**Note**: Replace `PUBLIC` and `PRIVATE` with your actual instance names. Environment variable names are case-insensitive and follow the pattern: `NOTIFIER_NOTIFIERS_NTFY_<INSTANCE_NAME>_<FIELD_NAME>`
 
 ## Security Considerations
 
@@ -390,7 +456,7 @@ export NOTIFIER_NOTIFIERS_NTFY_INSECURE_SKIP_VERIFY=false
 
 ## Kubernetes Deployment
 
-### Using Secrets
+### Creating Secrets
 
 ```yaml
 apiVersion: v1
@@ -399,18 +465,58 @@ metadata:
   name: notifier-secrets
 type: Opaque
 stringData:
-  ntfy-token: "tk_your_access_token"
+  ntfy-public-token: "tk_your_access_token"
+  ntfy-private-username: "your-username"
+  ntfy-private-password: "your-password"
+  ca-cert.pem: |
+    -----BEGIN CERTIFICATE-----
+    MIIBkTCB+wIJAKHHCgVkEkGZMA0GCSqGSIb3DQEBBQUAMBMxETAPBgNVBAMMCENB
+    ... (certificate content) ...
+    -----END CERTIFICATE-----
 ```
 
-### Deployment Configuration
+### Deployment Configuration with Multiple Instances
 
 ```yaml
 env:
-- name: NOTIFIER_NOTIFIERS_NTFY_TOKEN
+# Public ntfy.sh instance
+- name: NOTIFIER_NOTIFIERS_NTFY_PUBLIC_SERVER_URL
+  value: "https://ntfy.sh"
+- name: NOTIFIER_NOTIFIERS_NTFY_PUBLIC_TOKEN
   valueFrom:
     secretKeyRef:
       name: notifier-secrets
-      key: ntfy-token
+      key: ntfy-public-token
+- name: NOTIFIER_NOTIFIERS_NTFY_PUBLIC_DEFAULT
+  value: "true"
+
+# Private self-hosted instance
+- name: NOTIFIER_NOTIFIERS_NTFY_PRIVATE_SERVER_URL
+  value: "https://ntfy.mycompany.com"
+- name: NOTIFIER_NOTIFIERS_NTFY_PRIVATE_USERNAME
+  valueFrom:
+    secretKeyRef:
+      name: notifier-secrets
+      key: ntfy-private-username
+- name: NOTIFIER_NOTIFIERS_NTFY_PRIVATE_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: notifier-secrets
+      key: ntfy-private-password
+- name: NOTIFIER_NOTIFIERS_NTFY_PRIVATE_CA_CERT_PATH
+  value: "/etc/notifier/certs/ca.pem"
+
+volumeMounts:
+- name: ca-certs
+  mountPath: /etc/notifier/certs
+
+volumes:
+- name: ca-certs
+  secret:
+    secretName: notifier-secrets
+    items:
+    - key: ca-cert.pem
+      path: ca.pem
 ```
 
 ## Rate Limits
@@ -453,7 +559,16 @@ Error: ntfy server returned status: 404
 ```
 Error: x509: certificate signed by unknown authority
 ```
-**Solution**: Either fix certificate or set `insecure_skip_verify: true` (not recommended for production)
+**Solution**: Use `ca_cert_path` to specify the path to your CA certificate:
+```yaml
+notifiers:
+  ntfy:
+    private:
+      server_url: "https://ntfy.yourcompany.com"
+      token: "your_token"
+      ca_cert_path: "/etc/notifier/certs/ca.pem"
+```
+Ensure the certificate file is accessible and in PEM format. TLS verification is always enforced for security.
 
 ### Rate Limit Exceeded
 ```

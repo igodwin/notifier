@@ -1,0 +1,274 @@
+═══════════════════════════════════════════════════════════════════════════
+                     CODE DUPLICATION ANALYSIS REPORT
+                            October 26, 2025
+═══════════════════════════════════════════════════════════════════════════
+
+PROJECT: Notifier Service
+ANALYSIS TYPE: Code Duplication & Refactoring Opportunities
+SCOPE: Internal codebase (no public API changes)
+STATUS: ✅ Complete and Ready for Implementation
+
+───────────────────────────────────────────────────────────────────────────
+EXECUTIVE SUMMARY
+───────────────────────────────────────────────────────────────────────────
+
+The analysis identified 5 areas of code duplication affecting ~270 lines
+of code, with ~92 lines being the core duplicate code that can be removed.
+
+Key Finding: All duplication can be resolved through simple, low-complexity
+refactoring of existing patterns WITHOUT increasing overall complexity.
+
+───────────────────────────────────────────────────────────────────────────
+FINDINGS OVERVIEW
+───────────────────────────────────────────────────────────────────────────
+
+Issues Found: 5 distinct patterns
+Duplicate Lines: ~92 lines
+Similar Code Instances: ~270 lines
+Refactoring Effort: 2.5 hours
+Complexity Added: ZERO (extracting existing patterns)
+Risk Level: MINIMAL (internal only, no API changes)
+
+───────────────────────────────────────────────────────────────────────────
+ISSUES IDENTIFIED
+───────────────────────────────────────────────────────────────────────────
+
+1. AUTH VALIDATION DUPLICATION (HIGH PRIORITY)
+   Files: 3 (rest_middleware.go, grpc_middleware.go x2)
+   Lines: 32 duplicate lines
+   Pattern: Identical validation logic repeated in 3 places
+   Effort: 30 minutes
+   Benefit: Single source of truth for auth validation
+
+2. API KEY EXTRACTION DUPLICATION (MEDIUM PRIORITY)
+   Files: 2 (rest_middleware.go, grpc_middleware.go)
+   Lines: 15 duplicate lines
+   Pattern: Similar bearer token parsing
+   Effort: 20 minutes
+   Benefit: Consistent header parsing across protocols
+
+3. NOTIFIER REGISTRATION PATTERN (MEDIUM PRIORITY)
+   Files: 1 (cmd/server/main.go)
+   Lines: 30 duplicate lines
+   Pattern: Same registration code repeated 3 times
+   Effort: 45 minutes
+   Benefit: Easier to add new notifiers in future
+
+4. ERROR RESULT CREATION (LOW PRIORITY)
+   Files: 3 (slack.go, ntfy.go, smtp.go)
+   Lines: 15 duplicate lines
+   Pattern: Identical error result structs
+   Effort: 25 minutes
+   Benefit: Consistent result handling
+
+5. MIDDLEWARE ERROR LOGGING (LOW PRIORITY)
+   Files: 2 (rest_middleware.go, grpc_middleware.go)
+   Status: Covered by Issue #1 refactoring
+
+───────────────────────────────────────────────────────────────────────────
+REFACTORING ROADMAP
+───────────────────────────────────────────────────────────────────────────
+
+PHASE 1: QUICK WINS (1 HOUR) - Low Effort, Immediate Value
+  ├─ Issue #2: Extract Bearer Token Parsing      (20 min) → 15 lines removed
+  └─ Issue #4: Add Result Helper Methods         (25 min) → 15 lines removed
+  Result: 30 lines removed, easier code, immediate improvement
+
+PHASE 2: CORE REFACTORING (1.5 HOURS) - Medium Effort, High Value
+  ├─ Issue #1: Extract Auth Validation Helper    (30 min) → 32 lines removed
+  └─ Issue #3: Extract Notifier Registration     (45 min) → 30 lines removed
+  Result: 62 lines removed, better architecture, easier extension
+
+TOTAL IMPACT: 92 lines removed, ~40-50% reduction in duplication
+
+───────────────────────────────────────────────────────────────────────────
+WHY LOW COMPLEXITY?
+───────────────────────────────────────────────────────────────────────────
+
+✅ No New Abstractions
+   - Simply extracting existing code patterns
+   - No new interfaces or complex types
+   - No additional indirection
+
+✅ No Behavior Changes
+   - Same logic, just organized differently
+   - All existing tests will pass without modification
+   - No changes to public APIs
+
+✅ Simple Helper Functions
+   - extractBearerToken()     - 7 lines
+   - validateAndAuthorize()   - 15 lines
+   - ErrorResult()            - 5 lines
+   - SuccessResult()          - 8 lines
+   - registerNotifierType()   - 20 lines
+
+✅ Easy to Understand
+   - Each extracted function does ONE thing
+   - Clear naming indicates purpose
+   - Simple parameter lists
+   - Straightforward implementation
+
+───────────────────────────────────────────────────────────────────────────
+RISK ASSESSMENT
+───────────────────────────────────────────────────────────────────────────
+
+Overall Risk Level: MINIMAL (🟢 Green)
+
+Why Risk is Minimal:
+  ✓ No API changes - all refactoring is internal only
+  ✓ No logic changes - extracting existing patterns
+  ✓ Full test coverage - existing tests cover all changes
+  ✓ Atomic commits - each issue can be reverted independently
+  ✓ Easy rollback - simple git revert if needed
+  ✓ No new dependencies - using only stdlib
+  ✓ Incremental implementation - can do Phase 1 first
+
+Testing Strategy:
+  • All refactorings tested by existing test suite
+  • No new tests needed (refactoring only)
+  • Run: go test ./... after each phase
+  • Verify: go vet and go fmt pass
+
+───────────────────────────────────────────────────────────────────────────
+BENEFITS
+───────────────────────────────────────────────────────────────────────────
+
+IMMEDIATE BENEFITS:
+  ✓ ~92 lines of code eliminated
+  ✓ 5 patterns consolidated into reusable code
+  ✓ Easier to locate and understand patterns
+  ✓ Reduced potential for inconsistent updates
+
+MAINTAINABILITY:
+  ✓ Changes to validation logic made in one place
+  ✓ Result creation standardized across notifiers
+  ✓ API key extraction consistent across protocols
+  ✓ Easier to spot bugs or inconsistencies
+
+EXTENSIBILITY:
+  ✓ New notifiers easier to add (generic registration)
+  ✓ New auth methods easier to integrate
+  ✓ Clearer code structure for future developers
+  ✓ Better foundation for future enhancements
+
+───────────────────────────────────────────────────────────────────────────
+DOCUMENTATION PROVIDED
+───────────────────────────────────────────────────────────────────────────
+
+1. DUPLICATION_ANALYSIS.md (468 lines, 13 KB)
+   - Comprehensive analysis of all 5 issues
+   - Detailed code examples for each pattern
+   - Refactoring recommendations with rationale
+   - Implementation guidelines
+   - Risk assessment
+   - Testing strategy
+
+2. REFACTORING_QUICKREF.md (507 lines, 13 KB)
+   - Step-by-step implementation guide
+   - Copy-paste ready code snippets
+   - File locations and line numbers
+   - Testing checklist
+   - Rollback instructions
+   - Before/after code examples
+
+───────────────────────────────────────────────────────────────────────────
+RECOMMENDED IMPLEMENTATION PLAN
+───────────────────────────────────────────────────────────────────────────
+
+IMMEDIATE (Next 2-3 days):
+  1. Review DUPLICATION_ANALYSIS.md
+  2. Implement Phase 1 (Quick Wins) - 1 hour
+     - Extract bearer token parsing
+     - Add result helper methods
+  3. Run full test suite: go test ./...
+  4. Verify no behavior changes
+  5. Commit Phase 1 changes
+
+NEXT SPRINT:
+  6. Review Phase 2 requirements
+  7. Implement Phase 2 (Core Refactoring) - 1.5 hours
+     - Extract auth validation
+     - Extract notifier registration pattern
+  8. Run full test suite again
+  9. Code review
+  10. Merge to main
+
+BENEFITS AFTER COMPLETION:
+  • 92 fewer lines of code to maintain
+  • Consistent patterns across codebase
+  • Easier to add new features
+  • Better code quality
+
+───────────────────────────────────────────────────────────────────────────
+IMPLEMENTATION CHECKLIST
+───────────────────────────────────────────────────────────────────────────
+
+PRE-IMPLEMENTATION:
+  ☐ Read DUPLICATION_ANALYSIS.md
+  ☐ Review REFACTORING_QUICKREF.md
+  ☐ All tests passing: go test ./...
+  ☐ Code builds: go build ./cmd/server
+
+PHASE 1 (1 hour):
+  ☐ Extract bearer token parsing (20 min)
+    ☐ Add extractBearerToken() to auth.go
+    ☐ Update rest_middleware.go
+    ☐ Update grpc_middleware.go
+  ☐ Add result helper methods (25 min)
+    ☐ Add ErrorResult() to BaseNotifier
+    ☐ Add SuccessResult() to BaseNotifier
+    ☐ Update slack.go Send() method
+    ☐ Update ntfy.go Send() method
+    ☐ Update smtp.go Send() method
+  ☐ Test: go test ./internal/auth -v
+  ☐ Test: go test ./internal/notifier -v
+  ☐ Build: go build ./cmd/server
+  ☐ Format: go fmt ./...
+  ☐ Vet: go vet ./...
+  ☐ Commit Phase 1
+
+PHASE 2 (1.5 hours):
+  ☐ Extract auth validation (30 min)
+    ☐ Add validateAndAuthorize() helper
+    ☐ Update REST middleware
+    ☐ Update gRPC unary interceptor
+    ☐ Update gRPC stream interceptor
+  ☐ Extract notifier registration (45 min)
+    ☐ Add generic registration helper
+    ☐ Refactor registerNotifiers() function
+  ☐ Test: go test ./...
+  ☐ Build: go build ./cmd/server
+  ☐ Format: go fmt ./...
+  ☐ Vet: go vet ./...
+  ☐ Commit Phase 2
+
+POST-IMPLEMENTATION:
+  ☐ Full test suite passing: go test ./...
+  ☐ Code review completed
+  ☐ Documentation updated if needed
+  ☐ Merge to main branch
+
+───────────────────────────────────────────────────────────────────────────
+CONCLUSION
+───────────────────────────────────────────────────────────────────────────
+
+The analysis has identified clear, actionable opportunities to reduce code
+duplication without adding complexity to the codebase. All refactorings are:
+
+✅ Low complexity (extracting existing patterns)
+✅ Minimal risk (internal only, no API changes)
+✅ Well documented (detailed guides provided)
+✅ Easy to implement (step-by-step instructions)
+✅ Simple to test (existing tests cover changes)
+✅ Easy to rollback (atomic, independent commits)
+
+RECOMMENDATION: Implement Phase 1 immediately for quick wins, then Phase 2
+in the next sprint for a more comprehensive improvement.
+
+Current Status: ✅ READY FOR IMPLEMENTATION
+
+═══════════════════════════════════════════════════════════════════════════
+Generated: October 26, 2025
+Analysis Tool: Code Review and Pattern Detection
+Next Steps: See DUPLICATION_ANALYSIS.md and REFACTORING_QUICKREF.md
+═══════════════════════════════════════════════════════════════════════════

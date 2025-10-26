@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/igodwin/notifier/internal/auth"
 	"github.com/igodwin/notifier/internal/config"
 	"github.com/igodwin/notifier/internal/domain"
 	"github.com/igodwin/notifier/internal/logging"
@@ -21,6 +22,7 @@ type NotificationService struct {
 	factory                domain.NotifierFactory
 	queue                  domain.Queue
 	accountResolver        AccountResolver
+	authz                  *auth.NotifierAuthz
 	notifications          map[string]*domain.Notification
 	mu                     sync.RWMutex
 	workerCount            int
@@ -34,7 +36,7 @@ type NotificationService struct {
 }
 
 // NewNotificationService creates a new notification service
-func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, workerCount int, accountResolver AccountResolver, logger *logging.Logger) *NotificationService {
+func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, workerCount int, accountResolver AccountResolver, authz *auth.NotifierAuthz, logger *logging.Logger) *NotificationService {
 	if workerCount <= 0 {
 		workerCount = 10
 	}
@@ -43,6 +45,7 @@ func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, 
 		factory:         factory,
 		queue:           queue,
 		accountResolver: accountResolver,
+		authz:           authz,
 		notifications:   make(map[string]*domain.Notification),
 		workerCount:     workerCount,
 		stopChan:        make(chan struct{}),
@@ -433,16 +436,52 @@ func (s *NotificationService) GetStats(ctx context.Context) (*domain.Notificatio
 	return stats, nil
 }
 
-// GetNotifiers returns information about available notifiers
+// GetNotifiers returns information about available notifiers, filtered by authorization if auth context is provided
 func (s *NotificationService) GetNotifiers(ctx context.Context) (*domain.NotifiersResponse, error) {
+	// Extract auth context from request context if available
+	var authCtx *auth.AuthContext
+	if authVal := ctx.Value("auth"); authVal != nil {
+		if ac, ok := authVal.(*auth.AuthContext); ok {
+			authCtx = ac
+		}
+	}
+
 	supportedTypes := s.factory.SupportedTypes()
 	notifiers := make([]domain.NotifierInfo, 0, len(supportedTypes))
 
 	for _, notifType := range supportedTypes {
 		accounts := s.factory.GetAccounts(notifType)
+
+		// Filter accounts by authorization if auth context is available and authz is configured
+		if authCtx != nil && s.authz != nil {
+			authorizedAccounts := make([]string, 0, len(accounts))
+			for _, account := range accounts {
+				if s.authz.IsAuthorized(authCtx, notifType, account) {
+					authorizedAccounts = append(authorizedAccounts, account)
+				}
+			}
+			accounts = authorizedAccounts
+		}
+
+		// Skip notifier type if no authorized accounts
+		if len(accounts) == 0 && authCtx != nil {
+			continue
+		}
+
 		defaultAccount := ""
 		if s.accountResolver != nil {
 			defaultAccount = s.accountResolver.GetDefaultAccount(notifType)
+		}
+
+		// If default account was filtered out, clear it
+		if authCtx != nil && s.authz != nil && defaultAccount != "" {
+			if !s.authz.IsAuthorized(authCtx, notifType, defaultAccount) {
+				defaultAccount = ""
+				// If available, use first authorized account as default
+				if len(accounts) > 0 {
+					defaultAccount = accounts[0]
+				}
+			}
 		}
 
 		notifiers = append(notifiers, domain.NotifierInfo{
