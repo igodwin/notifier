@@ -108,3 +108,11 @@ health_check:
   port: 8081
   path: "/health"
   interval: 30 # seconds
+
+# Notification retention and automatic cleanup configuration
+retention:
+  enabled: true # Enable automatic cleanup of old/expired notifications
+  ttl: "168h" # Time-to-live: how long to keep notifications (default: 7 days)
+  check_frequency: "1h" # How often to run cleanup check (default: 1 hour)
+  max_size: 100000 # Maximum number of notifications to store in memory (default: 100,000)
+  # When max_size is exceeded, oldest notifications are removed first

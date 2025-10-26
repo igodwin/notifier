@@ -13,14 +13,15 @@ import (
 
 // Config represents the application configuration
 type Config struct {
-	Server      ServerConfig       `mapstructure:"server"`
-	Queue       domain.QueueConfig `mapstructure:"queue"`
-	Notifiers   NotifiersConfig    `mapstructure:"notifiers"`
-	Logging     LoggingConfig      `mapstructure:"logging"`
-	Metrics     MetricsConfig      `mapstructure:"metrics"`
-	HealthCheck HealthCheckConfig  `mapstructure:"health_check"`
-	Auth        AuthConfig         `mapstructure:"auth"`
-	ConfigFile  string             `mapstructure:"-"` // Path to config file used (not from config)
+	Server      ServerConfig                `mapstructure:"server"`
+	Queue       domain.QueueConfig          `mapstructure:"queue"`
+	Notifiers   NotifiersConfig             `mapstructure:"notifiers"`
+	Logging     LoggingConfig               `mapstructure:"logging"`
+	Metrics     MetricsConfig               `mapstructure:"metrics"`
+	HealthCheck HealthCheckConfig           `mapstructure:"health_check"`
+	Auth        AuthConfig                  `mapstructure:"auth"`
+	Retention   NotificationRetentionConfig `mapstructure:"retention"`
+	ConfigFile  string                      `mapstructure:"-"` // Path to config file used (not from config)
 }
 
 // ServerConfig contains server configuration
@@ -64,8 +65,16 @@ type HealthCheckConfig struct {
 
 // AuthConfig contains authentication and authorization configuration
 type AuthConfig struct {
-	Enabled       bool                  `mapstructure:"enabled"`        // Enable API key authentication
-	DefaultRateLimit int                `mapstructure:"default_rate_limit"` // Default rate limit in requests/minute (0 = unlimited)
+	Enabled          bool `mapstructure:"enabled"`            // Enable API key authentication
+	DefaultRateLimit int  `mapstructure:"default_rate_limit"` // Default rate limit in requests/minute (0 = unlimited)
+}
+
+// NotificationRetentionConfig contains notification retention and cleanup configuration
+type NotificationRetentionConfig struct {
+	Enabled        bool   `mapstructure:"enabled"`         // Enable automatic cleanup
+	TTL            string `mapstructure:"ttl"`             // Time-to-live duration (e.g., "168h" for 7 days)
+	CheckFrequency string `mapstructure:"check_frequency"` // How often to run cleanup (e.g., "1h")
+	MaxSize        int    `mapstructure:"max_size"`        // Maximum number of notifications to keep
 }
 
 // Load loads configuration from file and environment variables
@@ -169,8 +178,14 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("health_check.interval", 30)
 
 	// Auth defaults
-	v.SetDefault("auth.enabled", false) // Authentication disabled by default
+	v.SetDefault("auth.enabled", false)          // Authentication disabled by default
 	v.SetDefault("auth.default_rate_limit", 100) // 100 requests per minute default
+
+	// Retention defaults
+	v.SetDefault("retention.enabled", true)         // Enable retention cleanup by default
+	v.SetDefault("retention.ttl", "168h")           // 7 days default
+	v.SetDefault("retention.check_frequency", "1h") // Check every hour
+	v.SetDefault("retention.max_size", 100000)      // Maximum 100,000 notifications
 
 	// Notifier defaults
 	v.SetDefault("notifiers.stdout", true)

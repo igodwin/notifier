@@ -11,22 +11,22 @@ import (
 
 // APIKeyStore manages API keys with rate limiting
 type APIKeyStore struct {
-	mu        sync.RWMutex
-	keys      map[string]*APIKey
+	mu         sync.RWMutex
+	keys       map[string]*APIKey
 	rateLimits map[string]*RateLimiter
 }
 
 // APIKey represents an API key with metadata
 type APIKey struct {
-	Key          string   `json:"key"`
-	Name         string   `json:"name"`
-	ClientID     string   `json:"client_id"`
-	Roles        []string `json:"roles"`
-	CreatedAt    time.Time `json:"created_at"`
-	LastUsedAt   *time.Time `json:"last_used_at,omitempty"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
-	IsActive     bool     `json:"is_active"`
-	RateLimit    int      `json:"rate_limit"` // requests per minute, 0 = unlimited
+	Key        string     `json:"key"`
+	Name       string     `json:"name"`
+	ClientID   string     `json:"client_id"`
+	Roles      []string   `json:"roles"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	IsActive   bool       `json:"is_active"`
+	RateLimit  int        `json:"rate_limit"` // requests per minute, 0 = unlimited
 }
 
 // RateLimiter tracks rate limiting for a key
@@ -40,9 +40,9 @@ type RateLimiter struct {
 
 // AuthContext holds auth information attached to request context
 type AuthContext struct {
-	APIKey  *APIKey
+	APIKey   *APIKey
 	ClientID string
-	Roles   []string
+	Roles    []string
 }
 
 // NewAPIKeyStore creates a new API key store

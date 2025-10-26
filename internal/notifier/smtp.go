@@ -16,15 +16,15 @@ import (
 
 // SMTPConfig contains SMTP server configuration
 type SMTPConfig struct {
-	Host          string   `mapstructure:"host"`
-	Port          int      `mapstructure:"port"`
-	Username      string   `mapstructure:"username"`
-	Password      string   `mapstructure:"password"`
-	From          string   `mapstructure:"from"`
-	FromName      string   `mapstructure:"from_name"` // Optional display name for From header
-	UseTLS        bool     `mapstructure:"use_tls"`
-	Default       bool     `mapstructure:"default"` // Mark this instance as default
-	AllowedRoles  []string `mapstructure:"allowed_roles"`  // Roles allowed to use this notifier (empty = all authenticated)
+	Host         string   `mapstructure:"host"`
+	Port         int      `mapstructure:"port"`
+	Username     string   `mapstructure:"username"`
+	Password     string   `mapstructure:"password"`
+	From         string   `mapstructure:"from"`
+	FromName     string   `mapstructure:"from_name"` // Optional display name for From header
+	UseTLS       bool     `mapstructure:"use_tls"`
+	Default      bool     `mapstructure:"default"`       // Mark this instance as default
+	AllowedRoles []string `mapstructure:"allowed_roles"` // Roles allowed to use this notifier (empty = all authenticated)
 }
 
 // SMTPNotifier sends notifications via email using SMTP
@@ -198,11 +198,11 @@ func detectContentType(body string) domain.ContentType {
 	trimmed := strings.TrimSpace(body)
 	// Check for common HTML indicators
 	if strings.HasPrefix(trimmed, "<") ||
-	   strings.Contains(trimmed, "<html") ||
-	   strings.Contains(trimmed, "<!DOCTYPE") ||
-	   strings.Contains(trimmed, "<p>") ||
-	   strings.Contains(trimmed, "<div>") ||
-	   strings.Contains(trimmed, "<br>") {
+		strings.Contains(trimmed, "<html") ||
+		strings.Contains(trimmed, "<!DOCTYPE") ||
+		strings.Contains(trimmed, "<p>") ||
+		strings.Contains(trimmed, "<div>") ||
+		strings.Contains(trimmed, "<br>") {
 		return domain.ContentTypeHTML
 	}
 	return domain.ContentTypeText

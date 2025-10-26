@@ -18,9 +18,9 @@ type SlackConfig struct {
 	Channel      string            `mapstructure:"channel"`
 	Username     string            `mapstructure:"username"`
 	IconEmoji    string            `mapstructure:"icon_emoji"`
-	Webhooks     map[string]string `mapstructure:"webhooks"` // Channel-specific webhooks
-	Default      bool              `mapstructure:"default"`  // Mark this instance as default
-	AllowedRoles []string          `mapstructure:"allowed_roles"`  // Roles allowed to use this notifier (empty = all authenticated)
+	Webhooks     map[string]string `mapstructure:"webhooks"`      // Channel-specific webhooks
+	Default      bool              `mapstructure:"default"`       // Mark this instance as default
+	AllowedRoles []string          `mapstructure:"allowed_roles"` // Roles allowed to use this notifier (empty = all authenticated)
 }
 
 // SlackNotifier sends notifications to Slack

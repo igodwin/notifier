@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gorilla/mux"
 	grpcapi "github.com/igodwin/notifier/api/grpc"
 	pb "github.com/igodwin/notifier/api/grpc/pb"
 	"github.com/igodwin/notifier/api/rest"
@@ -22,7 +23,6 @@ import (
 	"github.com/igodwin/notifier/internal/notifier"
 	"github.com/igodwin/notifier/internal/queue"
 	"github.com/igodwin/notifier/internal/service"
-	"github.com/gorilla/mux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -100,6 +100,16 @@ func main() {
 
 	// Create notification service (pass config as account resolver)
 	svc := service.NewNotificationService(factory, q, cfg.Queue.WorkerCount, cfg, logger)
+
+	// Configure notification retention if enabled
+	if err := svc.WithRetentionConfig(cfg.Retention); err != nil {
+		logger.Warnf("Failed to configure retention: %v", err)
+		// Log defaults that will be used
+		logger.Infof("Using default retention config: enabled=%v", cfg.Retention.Enabled)
+	} else if cfg.Retention.Enabled {
+		logger.Infof("Configured notification retention: ttl=%s, check_frequency=%s, max_size=%d",
+			cfg.Retention.TTL, cfg.Retention.CheckFrequency, cfg.Retention.MaxSize)
+	}
 
 	// Start workers
 	if err := svc.Start(ctx); err != nil {

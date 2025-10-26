@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/igodwin/notifier/internal/config"
 	"github.com/igodwin/notifier/internal/domain"
 	"github.com/igodwin/notifier/internal/logging"
 )
@@ -17,15 +18,19 @@ type AccountResolver interface {
 
 // NotificationService implements the domain.NotificationService interface
 type NotificationService struct {
-	factory         domain.NotifierFactory
-	queue           domain.Queue
-	accountResolver AccountResolver
-	notifications   map[string]*domain.Notification
-	mu              sync.RWMutex
-	workerCount     int
-	stopChan        chan struct{}
-	wg              sync.WaitGroup
-	logger          *logging.Logger
+	factory                domain.NotifierFactory
+	queue                  domain.Queue
+	accountResolver        AccountResolver
+	notifications          map[string]*domain.Notification
+	mu                     sync.RWMutex
+	workerCount            int
+	stopChan               chan struct{}
+	wg                     sync.WaitGroup
+	logger                 *logging.Logger
+	retentionConfig        config.NotificationRetentionConfig
+	cleanupStopChan        chan struct{}
+	ttlDuration            time.Duration
+	checkFrequencyDuration time.Duration
 }
 
 // NewNotificationService creates a new notification service
@@ -42,23 +47,135 @@ func NewNotificationService(factory domain.NotifierFactory, queue domain.Queue, 
 		workerCount:     workerCount,
 		stopChan:        make(chan struct{}),
 		logger:          logger,
+		cleanupStopChan: make(chan struct{}),
 	}
 }
 
-// Start starts the worker pool
+// WithRetentionConfig sets the notification retention configuration
+func (s *NotificationService) WithRetentionConfig(cfg config.NotificationRetentionConfig) error {
+	s.retentionConfig = cfg
+
+	// Parse TTL duration
+	ttl, err := time.ParseDuration(cfg.TTL)
+	if err != nil {
+		return fmt.Errorf("invalid TTL duration: %w", err)
+	}
+	s.ttlDuration = ttl
+
+	// Parse check frequency duration
+	checkFreq, err := time.ParseDuration(cfg.CheckFrequency)
+	if err != nil {
+		return fmt.Errorf("invalid check frequency duration: %w", err)
+	}
+	s.checkFrequencyDuration = checkFreq
+
+	return nil
+}
+
+// Start starts the worker pool and cleanup goroutine
 func (s *NotificationService) Start(ctx context.Context) error {
 	for i := 0; i < s.workerCount; i++ {
 		s.wg.Add(1)
 		go s.worker(ctx, i)
 	}
+
+	// Start cleanup goroutine if retention is enabled
+	if s.retentionConfig.Enabled && s.checkFrequencyDuration > 0 {
+		s.wg.Add(1)
+		go s.cleanupLoop(ctx)
+	}
+
 	return nil
 }
 
 // Stop stops the service gracefully
 func (s *NotificationService) Stop() error {
 	close(s.stopChan)
+	close(s.cleanupStopChan)
 	s.wg.Wait()
 	return s.queue.Close()
+}
+
+// cleanupLoop runs at regular intervals to clean up old or excessive notifications
+func (s *NotificationService) cleanupLoop(ctx context.Context) {
+	defer s.wg.Done()
+
+	ticker := time.NewTicker(s.checkFrequencyDuration)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.cleanupStopChan:
+			s.logger.Debugf("Cleanup loop stopped")
+			return
+		case <-ctx.Done():
+			s.logger.Debugf("Cleanup loop context cancelled")
+			return
+		case <-ticker.C:
+			s.performCleanup()
+		}
+	}
+}
+
+// performCleanup removes expired notifications and enforces maximum size limit
+func (s *NotificationService) performCleanup() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	now := time.Now()
+	expiredBefore := now.Add(-s.ttlDuration)
+
+	// Track which notifications to delete
+	var toDelete []string
+	var allNotifications []*domain.Notification
+
+	// First pass: identify expired notifications and collect all for sorting
+	for id, notification := range s.notifications {
+		if notification.CreatedAt.Before(expiredBefore) {
+			toDelete = append(toDelete, id)
+		}
+		allNotifications = append(allNotifications, notification)
+	}
+
+	// Delete expired notifications
+	for _, id := range toDelete {
+		delete(s.notifications, id)
+	}
+
+	expiredCount := len(toDelete)
+
+	// Second pass: enforce max size limit by removing oldest notifications
+	if s.retentionConfig.MaxSize > 0 && len(s.notifications) > s.retentionConfig.MaxSize {
+		excessCount := len(s.notifications) - s.retentionConfig.MaxSize
+
+		// Sort remaining notifications by creation time (oldest first)
+		remaining := make([]*domain.Notification, 0, len(s.notifications))
+		for _, notification := range s.notifications {
+			remaining = append(remaining, notification)
+		}
+
+		// Simple bubble sort to find oldest notifications (more efficient alternatives available)
+		for i := 0; i < len(remaining)-1; i++ {
+			for j := 0; j < len(remaining)-i-1; j++ {
+				if remaining[j].CreatedAt.After(remaining[j+1].CreatedAt) {
+					remaining[j], remaining[j+1] = remaining[j+1], remaining[j]
+				}
+			}
+		}
+
+		// Delete the oldest excessCount notifications
+		for i := 0; i < excessCount && i < len(remaining); i++ {
+			delete(s.notifications, remaining[i].ID)
+		}
+	}
+
+	currentSize := len(s.notifications)
+
+	// Log cleanup statistics
+	if expiredCount > 0 || currentSize > s.retentionConfig.MaxSize {
+		s.logger.Infof("Cleanup completed - expired=%d, current_size=%d, max_size=%d",
+			expiredCount, currentSize, s.retentionConfig.MaxSize)
+	}
 }
 
 // worker processes notifications from the queue
