@@ -103,7 +103,7 @@ func main() {
 			if err != nil {
 				logger.Fatalf("Failed to create database key store: %v", err)
 			}
-			logger.Infof("Connected to authentication database: %s", cfg.Auth.Database.URL)
+			logger.Infof("Connected to authentication database: %s", config.SanitizeDatabaseURL(cfg.Auth.Database.URL))
 		} else {
 			logger.Warn("No database configured for authentication - API keys will only be stored in memory")
 		}

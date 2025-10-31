@@ -418,6 +418,9 @@ func (c *Config) Sanitize() map[string]interface{} {
 	// Sanitize auth config
 	sanitized["auth"] = map[string]interface{}{
 		"enabled": c.Auth.Enabled,
+		"database": map[string]interface{}{
+			"url": SanitizeDatabaseURL(c.Auth.Database.URL),
+		},
 		"bootstrap": map[string]interface{}{
 			"enabled":                c.Auth.Bootstrap.Enabled,
 			"admin_key_file":         c.Auth.Bootstrap.AdminKeyFileName,
@@ -436,6 +439,47 @@ func (c *Config) Sanitize() map[string]interface{} {
 	}
 
 	return sanitized
+}
+
+// SanitizeDatabaseURL redacts the password from a database connection URL
+// Handles formats like: postgresql://user:password@host:port/database
+// Also handles passwords containing @ characters by finding the last @
+func SanitizeDatabaseURL(dbURL string) string {
+	if dbURL == "" {
+		return ""
+	}
+
+	// Find the protocol (e.g., "postgresql://", "mysql://")
+	protocolIdx := strings.Index(dbURL, "://")
+	if protocolIdx == -1 {
+		return dbURL
+	}
+
+	protocol := dbURL[:protocolIdx+3]
+	remaining := dbURL[protocolIdx+3:]
+
+	// Find the LAST @ symbol that separates credentials from host
+	// (to handle passwords that may contain @ characters)
+	atIdx := strings.LastIndex(remaining, "@")
+	if atIdx == -1 {
+		// No credentials in the URL
+		return dbURL
+	}
+
+	// Extract credentials part and check if there's a password
+	credentials := remaining[:atIdx]
+	hostPart := remaining[atIdx:]
+
+	// Check if there's a colon (indicating a password)
+	colonIdx := strings.Index(credentials, ":")
+	if colonIdx == -1 {
+		// No password, just username
+		return protocol + credentials + hostPart
+	}
+
+	// Extract username and redact password
+	username := credentials[:colonIdx]
+	return protocol + username + ":***REDACTED***" + hostPart
 }
 
 // GetDefaultAccount returns the default account name for a notifier type, or the first account if no default is set
