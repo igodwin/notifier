@@ -224,7 +224,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.bootstrap.kubernetes_secret_key", "admin-key")           // Default secret key
 
 	// CORS defaults - secure by default (no origins allowed)
-	v.SetDefault("cors.allowed_origins", []string{})                                // Empty by default - must be explicitly configured
+	v.SetDefault("cors.allowed_origins", []string{})                                   // Empty by default - must be explicitly configured
 	v.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS", "DELETE"}) // Standard REST methods
 	v.SetDefault("cors.allowed_headers", []string{"Content-Type", "Authorization"})    // Common headers
 	v.SetDefault("cors.allow_credentials", false)                                      // Credentials disabled by default

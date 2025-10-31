@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gorilla/mux"
 	grpcapi "github.com/igodwin/notifier/api/grpc"
 	pb "github.com/igodwin/notifier/api/grpc/pb"
 	"github.com/igodwin/notifier/api/rest"

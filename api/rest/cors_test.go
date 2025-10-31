@@ -23,13 +23,13 @@ func TestCORSMiddleware_AllowedOrigin(t *testing.T) {
 	}))
 
 	tests := []struct {
-		name           string
-		origin         string
-		expectOrigin   string
-		expectMethods  string
-		expectHeaders  string
-		expectMaxAge   string
-		expectCreds    string
+		name          string
+		origin        string
+		expectOrigin  string
+		expectMethods string
+		expectHeaders string
+		expectMaxAge  string
+		expectCreds   string
 	}{
 		{
 			name:          "allowed origin - example.com",
@@ -323,9 +323,9 @@ func TestDefaultCORSConfig(t *testing.T) {
 // TestCORSMiddleware_MaxAge tests custom max age values
 func TestCORSMiddleware_MaxAge(t *testing.T) {
 	tests := []struct {
-		name           string
-		maxAge         int
-		expectMaxAge   string
+		name         string
+		maxAge       int
+		expectMaxAge string
 	}{
 		{
 			name:         "zero max age",

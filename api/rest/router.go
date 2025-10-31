@@ -2,6 +2,8 @@ package rest
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/igodwin/notifier/internal/auth"
@@ -104,4 +106,57 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		// You can add structured logging here
 		next.ServeHTTP(w, r)
 	})
+}
+
+// newCORSMiddleware creates a CORS middleware with origin whitelist validation
+func newCORSMiddleware(config *CORSConfig) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			origin := r.Header.Get("Origin")
+
+			// Check if the origin is in the allowed list
+			allowed := false
+			for _, allowedOrigin := range config.AllowedOrigins {
+				if origin == allowedOrigin {
+					allowed = true
+					break
+				}
+			}
+
+			// Only set CORS headers if the origin is allowed
+			if allowed {
+				// Set the exact origin (never use wildcard)
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+
+				// Set allowed methods
+				if len(config.AllowedMethods) > 0 {
+					w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
+				}
+
+				// Set allowed headers
+				if len(config.AllowedHeaders) > 0 {
+					w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
+				}
+
+				// Set credentials header if enabled
+				if config.AllowCredentials {
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+				}
+
+				// Set max age for preflight caching
+				if config.MaxAge > 0 {
+					w.Header().Set("Access-Control-Max-Age", strconv.FormatInt(int64(config.MaxAge), 10))
+				}
+			}
+
+			// Handle preflight OPTIONS requests
+			if r.Method == http.MethodOptions {
+				// Return 200 OK for preflight requests
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
