@@ -2,6 +2,7 @@ package rest
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -41,6 +42,14 @@ func (r *SendNotificationRequest) Validate() error {
 		return fmt.Errorf("body is required")
 	}
 
+	// Validate content type if specified (must be "text" or "html", case-insensitive)
+	if r.ContentType != "" {
+		contentTypeLower := strings.ToLower(r.ContentType)
+		if contentTypeLower != "text" && contentTypeLower != "html" {
+			return fmt.Errorf("invalid content_type: must be 'text' or 'html' (got %q)", r.ContentType)
+		}
+	}
+
 	return nil
 }
 
@@ -52,8 +61,9 @@ func (r *SendNotificationRequest) ToNotification() *domain.Notification {
 	}
 
 	// Convert content type, defaulting to text
-	contentType := domain.ContentType(r.ContentType)
-	if contentType == "" {
+	// Normalize to lowercase to handle case-insensitive input (e.g., "HTML" -> "html")
+	contentType := domain.ContentType(strings.ToLower(r.ContentType))
+	if contentType == "" || contentType != domain.ContentTypeHTML {
 		contentType = domain.ContentTypeText
 	}
 

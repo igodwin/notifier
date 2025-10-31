@@ -145,9 +145,9 @@ func (s *SMTPNotifier) buildMessage(notification *domain.Notification) string {
 	builder.WriteString(fmt.Sprintf("Subject: %s\r\n", notification.Subject))
 	builder.WriteString("MIME-Version: 1.0\r\n")
 
-	// Auto-detect HTML if content type not set
+	// Auto-detect HTML if content type not explicitly set to text
 	contentType := notification.ContentType
-	if contentType == "" {
+	if contentType == "" || contentType == "auto" {
 		contentType = detectContentType(notification.Body)
 	}
 
