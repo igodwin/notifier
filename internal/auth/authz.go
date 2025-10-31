@@ -34,21 +34,32 @@ func (a *NotifierAuthz) IsAuthorized(auth *AuthContext, notificationType domain.
 	key := makeAuthzKey(notificationType, account)
 	allowedRoles, exists := a.rules[key]
 
-	// If no specific rule is registered, allow all authenticated users
-	if !exists {
-		return true
-	}
-
-	// Check if any of the user's roles is in the allowed roles
-	for _, userRole := range auth.Roles {
-		for _, allowedRole := range allowedRoles {
-			if userRole == allowedRole {
-				return true
+	// If RBAC is enabled (at least one rule exists), restrict access:
+	// - Notifiers with explicit rules: check if user has allowed roles
+	// - Notifiers without rules: deny access (must be explicitly allowed)
+	if a.HasRules() {
+		if !exists {
+			// RBAC is enabled but this notifier has no rule - deny access
+			return false
+		}
+		// Check if any of the user's roles is in the allowed roles
+		for _, userRole := range auth.Roles {
+			for _, allowedRole := range allowedRoles {
+				if userRole == allowedRole {
+					return true
+				}
 			}
 		}
+		return false
 	}
 
-	return false
+	// If no rules are registered at all, allow all authenticated users (open access)
+	return true
+}
+
+// HasRules returns true if any authorization rules have been registered
+func (a *NotifierAuthz) HasRules() bool {
+	return len(a.rules) > 0
 }
 
 // GetAllowedRoles returns the allowed roles for a notifier
