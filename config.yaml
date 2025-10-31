@@ -109,6 +109,42 @@ health_check:
   path: "/health"
   interval: 30 # seconds
 
+# CORS (Cross-Origin Resource Sharing) configuration
+# Controls which web origins can access the REST API
+cors:
+  # Whitelist of allowed origins - wildcards (*) are NOT supported for security
+  # Development example: Allow localhost on common ports
+  allowed_origins:
+    - "http://localhost:3000"    # Common React/Next.js dev port
+    - "http://localhost:8080"    # Common Vue/Angular dev port
+    - "http://localhost:5173"    # Vite dev server
+
+  # Production example (commented out):
+  # allowed_origins:
+  #   - "https://app.example.com"       # Production web app
+  #   - "https://dashboard.example.com" # Admin dashboard
+  #   - "https://api-docs.example.com"  # API documentation site
+
+  # Allowed HTTP methods (defaults shown below)
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "OPTIONS"
+    - "DELETE"
+
+  # Allowed request headers (defaults shown below)
+  allowed_headers:
+    - "Content-Type"
+    - "Authorization"
+
+  # Allow credentials (cookies, authorization headers)
+  # Set to true if your frontend needs to send auth tokens
+  allow_credentials: false
+
+  # Cache duration for preflight OPTIONS requests (in seconds)
+  # Browsers will cache the CORS preflight response for this duration
+  max_age: 3600 # 1 hour
+
 # Notification retention and automatic cleanup configuration
 retention:
   enabled: true # Enable automatic cleanup of old/expired notifications

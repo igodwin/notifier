@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gorilla/mux"
 	grpcapi "github.com/igodwin/notifier/api/grpc"
 	pb "github.com/igodwin/notifier/api/grpc/pb"
 	"github.com/igodwin/notifier/api/rest"
@@ -286,12 +285,24 @@ func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 }
 
 func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore) *http.Server {
-	var router *mux.Router
-	if authStore != nil {
-		router = rest.NewRouterWithAuth(svc, logger, authStore)
-	} else {
-		router = rest.NewRouter(svc, logger)
+	// Convert config CORS to rest.CORSConfig
+	corsConfig := &rest.CORSConfig{
+		AllowedOrigins:   cfg.CORS.AllowedOrigins,
+		AllowedMethods:   cfg.CORS.AllowedMethods,
+		AllowedHeaders:   cfg.CORS.AllowedHeaders,
+		AllowCredentials: cfg.CORS.AllowCredentials,
+		MaxAge:           cfg.CORS.MaxAge,
 	}
+
+	// Log CORS configuration
+	if len(cfg.CORS.AllowedOrigins) > 0 {
+		logger.Infof("CORS enabled for origins: %v", cfg.CORS.AllowedOrigins)
+	} else {
+		logger.Warn("CORS has no allowed origins configured - all cross-origin requests will be blocked")
+	}
+
+	// Create router with auth and CORS config
+	router := rest.NewRouterWithAuth(svc, logger, authStore, corsConfig)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.RESTPort)
 	server := &http.Server{

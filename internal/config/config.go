@@ -20,6 +20,7 @@ type Config struct {
 	Metrics     MetricsConfig               `mapstructure:"metrics"`
 	HealthCheck HealthCheckConfig           `mapstructure:"health_check"`
 	Auth        AuthConfig                  `mapstructure:"auth"`
+	CORS        CORSConfig                  `mapstructure:"cors"`
 	Retention   NotificationRetentionConfig `mapstructure:"retention"`
 	ConfigFile  string                      `mapstructure:"-"` // Path to config file used (not from config)
 }
@@ -67,6 +68,26 @@ type HealthCheckConfig struct {
 type AuthConfig struct {
 	Enabled          bool `mapstructure:"enabled"`            // Enable API key authentication
 	DefaultRateLimit int  `mapstructure:"default_rate_limit"` // Default rate limit in requests/minute (0 = unlimited)
+}
+
+// CORSConfig contains CORS (Cross-Origin Resource Sharing) configuration
+type CORSConfig struct {
+	// AllowedOrigins is a whitelist of allowed origins (e.g., ["https://example.com", "https://app.example.com"])
+	// Wildcards (*) are NOT supported for security reasons - you must specify exact origins
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
+
+	// AllowedMethods is a list of allowed HTTP methods (e.g., ["GET", "POST", "OPTIONS", "DELETE"])
+	AllowedMethods []string `mapstructure:"allowed_methods"`
+
+	// AllowedHeaders is a list of allowed HTTP headers (e.g., ["Content-Type", "Authorization"])
+	AllowedHeaders []string `mapstructure:"allowed_headers"`
+
+	// AllowCredentials indicates whether credentials (cookies, authorization headers) are allowed
+	// Note: When true, AllowedOrigins must NOT contain wildcards (enforced by validation)
+	AllowCredentials bool `mapstructure:"allow_credentials"`
+
+	// MaxAge is the duration in seconds that browsers can cache preflight responses
+	MaxAge int `mapstructure:"max_age"`
 }
 
 // NotificationRetentionConfig contains notification retention and cleanup configuration
@@ -181,6 +202,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("auth.enabled", false)          // Authentication disabled by default
 	v.SetDefault("auth.default_rate_limit", 100) // 100 requests per minute default
 
+	// CORS defaults - secure by default (no origins allowed)
+	v.SetDefault("cors.allowed_origins", []string{})                                // Empty by default - must be explicitly configured
+	v.SetDefault("cors.allowed_methods", []string{"GET", "POST", "OPTIONS", "DELETE"}) // Standard REST methods
+	v.SetDefault("cors.allowed_headers", []string{"Content-Type", "Authorization"})    // Common headers
+	v.SetDefault("cors.allow_credentials", false)                                      // Credentials disabled by default
+	v.SetDefault("cors.max_age", 3600)                                                 // 1 hour cache for preflight
+
 	// Retention defaults
 	v.SetDefault("retention.enabled", true)         // Enable retention cleanup by default
 	v.SetDefault("retention.ttl", "168h")           // 7 days default
@@ -222,6 +250,32 @@ func (c *Config) Validate() error {
 	// Validate at least one notifier is configured
 	if !c.HasAnyNotifier() {
 		return fmt.Errorf("at least one notifier must be configured")
+	}
+
+	// Validate CORS configuration
+	if err := c.validateCORS(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateCORS validates the CORS configuration
+func (c *Config) validateCORS() error {
+	// Check for wildcard in allowed origins (security vulnerability)
+	for _, origin := range c.CORS.AllowedOrigins {
+		if origin == "*" {
+			return fmt.Errorf("wildcard (*) is not allowed in CORS allowed_origins for security reasons - specify exact origins instead")
+		}
+		// Check for invalid origin format
+		if origin != "" && !strings.HasPrefix(origin, "http://") && !strings.HasPrefix(origin, "https://") {
+			return fmt.Errorf("invalid origin format: %s - origins must start with http:// or https://", origin)
+		}
+	}
+
+	// Validate that credentials are not used with empty origin list (pointless configuration)
+	if c.CORS.AllowCredentials && len(c.CORS.AllowedOrigins) == 0 {
+		return fmt.Errorf("allow_credentials is enabled but no origins are allowed - this configuration is ineffective")
 	}
 
 	return nil

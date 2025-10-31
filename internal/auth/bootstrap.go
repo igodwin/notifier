@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/igodwin/notifier/internal/logging"
@@ -68,13 +69,13 @@ func BootstrapAdminKey(ctx context.Context, keyStore *HybridKeyStore, cfg *Boots
 
 	// Print to stdout if configured (DANGEROUS - only for interactive setup)
 	if cfg.PrintToStdout {
-		fmt.Println("\n" + "="*60)
+		fmt.Println("\n" + strings.Repeat("=", 60))
 		fmt.Println("NOTIFIER BOOTSTRAP: ADMIN KEY CREATED")
-		fmt.Println("="*60)
+		fmt.Println(strings.Repeat("=", 60))
 		fmt.Printf("Key: %s\n", apiKey.Key)
 		fmt.Println("\nSave this key in a secure location. You will not be able to see it again.")
 		fmt.Println("Use this key to create additional API keys via the key management API.")
-		fmt.Println("="*60 + "\n")
+		fmt.Println(strings.Repeat("=", 60) + "\n")
 	}
 
 	logger.Infof("Bootstrap admin key created successfully")

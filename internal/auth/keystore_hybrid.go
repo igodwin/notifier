@@ -127,16 +127,35 @@ func (h *HybridKeyStore) UpdateLastUsed(ctx context.Context, keyStr string) erro
 }
 
 // CheckRateLimit checks if a key has exceeded its rate limit
-func (h *HybridKeyStore) CheckRateLimit(keyStr string) error {
+func (h *HybridKeyStore) CheckRateLimit(keyStr string) (bool, error) {
 	h.cache.mu.RLock()
 	defer h.cache.mu.RUnlock()
 
 	limiter, exists := h.cache.rateLimits[keyStr]
 	if !exists {
-		return fmt.Errorf("rate limiter not found")
+		return false, fmt.Errorf("rate limiter not found")
 	}
 
-	return limiter.Check()
+	// Check if we're under the rate limit
+	if limiter.maxRequests == 0 {
+		return true, nil // Unlimited
+	}
+
+	limiter.mu.Lock()
+	defer limiter.mu.Unlock()
+
+	now := time.Now()
+	if now.After(limiter.resetTime) {
+		limiter.resetTime = now.Add(limiter.window)
+		limiter.count = 0
+	}
+
+	if limiter.count >= limiter.maxRequests {
+		return false, nil
+	}
+
+	limiter.count++
+	return true, nil
 }
 
 // GetAuditLog retrieves audit log for a key

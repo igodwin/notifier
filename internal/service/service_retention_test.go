@@ -31,7 +31,7 @@ func createTestService(t *testing.T) *NotificationService {
 		t.Fatalf("Failed to create logger: %v", err)
 	}
 
-	svc := NewNotificationService(factory, q, 2, nil, logger)
+	svc := NewNotificationService(factory, q, 2, nil, nil, logger)
 	return svc
 }
 
