@@ -5,6 +5,7 @@ FROM golang:1.24-alpine AS builder
 ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_TIME=unknown
+ARG BUILD_FLAGS="-s -w"
 
 # Install build dependencies including protoc
 RUN apk add --no-cache git make protobuf protobuf-dev
@@ -30,7 +31,7 @@ RUN make proto-gen
 
 # Build binary with version information
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags "-X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME}" \
+    -ldflags "-X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME} ${BUILD_FLAGS}" \
     -o server ./cmd/server
 
 # Runtime stage

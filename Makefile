@@ -1,4 +1,4 @@
-.PHONY: proto proto-gen proto-clean deps build run run-grpc run-rest test lint fmt vet check docker-build docker-run clean help
+.PHONY: proto proto-gen proto-clean deps build build-dev run run-grpc run-rest test lint fmt vet check docker-build docker-build-dev docker-run clean help
 
 # Variables
 PROTO_DIR=api/grpc
@@ -11,7 +11,15 @@ GO_FILES=$(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path 
 VERSION ?= dev
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S_UTC')
-LDFLAGS := -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)
+
+# Base LDFLAGS (version info only)
+LDFLAGS_BASE := -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)
+
+# Production LDFLAGS: include symbol stripping for smaller binaries
+LDFLAGS := $(LDFLAGS_BASE) -s -w
+
+# Development LDFLAGS: keep symbols for debugging
+LDFLAGS_DEV := $(LDFLAGS_BASE)
 
 # Generate protobuf code
 proto-gen:
@@ -42,15 +50,27 @@ proto-deps:
 	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 	@echo "Protoc plugins installed"
 
-# Build binary
+# Build binary (production - optimized with stripped symbols)
 build:
-	@echo "Building binary..."
+	@echo "Building binary (production - optimized)..."
 	@echo "Version: $(VERSION)"
 	@echo "Git Commit: $(GIT_COMMIT)"
 	@echo "Build Time: $(BUILD_TIME)"
 	@mkdir -p bin
 	go build -ldflags "$(LDFLAGS)" -o bin/server ./cmd/server
-	@echo "Binary built successfully"
+	@ls -lh bin/server
+	@echo "Binary built successfully (symbols stripped for smaller size)"
+
+# Build binary with debug symbols (development)
+build-dev:
+	@echo "Building binary (development - with debug symbols)..."
+	@echo "Version: $(VERSION)"
+	@echo "Git Commit: $(GIT_COMMIT)"
+	@echo "Build Time: $(BUILD_TIME)"
+	@mkdir -p bin
+	go build -ldflags "$(LDFLAGS_DEV)" -o bin/server ./cmd/server
+	@ls -lh bin/server
+	@echo "Binary built successfully (debug symbols included for profiling/debugging)"
 
 # Run server (default: both REST and gRPC)
 run:
@@ -118,9 +138,9 @@ lint:
 qa: fmt vet lint test
 	@echo "All quality checks passed!"
 
-# Build Docker image
+# Build Docker image (production - optimized)
 docker-build:
-	@echo "Building Docker image..."
+	@echo "Building Docker image (production - optimized)..."
 	@echo "Version: $(VERSION)"
 	@echo "Git Commit: $(GIT_COMMIT)"
 	@echo "Build Time: $(BUILD_TIME)"
@@ -128,8 +148,23 @@ docker-build:
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		--build-arg BUILD_FLAGS="-s -w" \
 		-t notifier:latest .
-	@echo "Docker image built successfully"
+	@echo "Docker image built successfully (production - optimized)"
+
+# Build Docker image with debug symbols (development)
+docker-build-dev:
+	@echo "Building Docker image (development - with debug symbols)..."
+	@echo "Version: $(VERSION)"
+	@echo "Git Commit: $(GIT_COMMIT)"
+	@echo "Build Time: $(BUILD_TIME)"
+	docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		--build-arg BUILD_FLAGS="" \
+		-t notifier:latest-dev .
+	@echo "Docker image built successfully (development)"
 
 # Run Docker container
 docker-run:
