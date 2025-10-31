@@ -2,8 +2,6 @@ package rest
 
 import (
 	"net/http"
-	"strconv"
-	"strings"
 
 	"github.com/gorilla/mux"
 	"github.com/igodwin/notifier/internal/auth"
@@ -45,11 +43,16 @@ func DefaultCORSConfig() *CORSConfig {
 
 // NewRouter creates a new HTTP router with all routes configured
 func NewRouter(service domain.NotificationService, logger *logging.Logger) *mux.Router {
-	return NewRouterWithAuth(service, logger, nil, DefaultCORSConfig())
+	return NewRouterWithAuth(service, logger, nil)
 }
 
 // NewRouterWithAuth creates a new HTTP router with optional authentication and CORS configuration
-func NewRouterWithAuth(service domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore, corsConfig *CORSConfig) *mux.Router {
+func NewRouterWithAuth(service domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore) *mux.Router {
+	return NewRouterWithAuthAndKeyStore(service, logger, authStore, nil)
+}
+
+// NewRouterWithAuthAndKeyStore creates a new HTTP router with authentication and key management
+func NewRouterWithAuthAndKeyStore(service domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore, keyStore *auth.HybridKeyStore) *mux.Router {
 	handler := NewHandler(service, logger)
 	router := mux.NewRouter()
 
@@ -76,14 +79,21 @@ func NewRouterWithAuth(service domain.NotificationService, logger *logging.Logge
 	// Notifiers route
 	v1.HandleFunc("/notifiers", handler.GetNotifiers).Methods(http.MethodGet)
 
+	// Key management routes (requires auth and keystore)
+	if authStore != nil && keyStore != nil {
+		keyHandler := NewKeyManagementHandler(keyStore, logger)
+		v1.HandleFunc("/admin/keys", keyHandler.CreateKey).Methods(http.MethodPost)
+		v1.HandleFunc("/admin/keys", keyHandler.ListKeys).Methods(http.MethodGet)
+		v1.HandleFunc("/admin/keys/{key}", keyHandler.RevokeKey).Methods(http.MethodDelete)
+		v1.HandleFunc("/admin/keys/{key}/rotate", keyHandler.RotateKey).Methods(http.MethodPost)
+		v1.HandleFunc("/admin/keys/{key}/audit", keyHandler.GetAuditLog).Methods(http.MethodGet)
+	}
+
 	// Health check route (no auth required)
 	router.HandleFunc("/health", handler.HealthCheck).Methods(http.MethodGet)
 
-	// Middleware - CORS must be applied before auth to handle preflight requests
+	// Middleware - logging and CORS
 	router.Use(loggingMiddleware)
-	if corsConfig != nil {
-		router.Use(newCORSMiddleware(corsConfig))
-	}
 
 	return router
 }
@@ -94,57 +104,4 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		// You can add structured logging here
 		next.ServeHTTP(w, r)
 	})
-}
-
-// newCORSMiddleware creates a CORS middleware with origin whitelist validation
-func newCORSMiddleware(config *CORSConfig) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
-
-			// Check if the origin is in the allowed list
-			allowed := false
-			for _, allowedOrigin := range config.AllowedOrigins {
-				if origin == allowedOrigin {
-					allowed = true
-					break
-				}
-			}
-
-			// Only set CORS headers if the origin is allowed
-			if allowed {
-				// Set the exact origin (never use wildcard)
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-
-				// Set allowed methods
-				if len(config.AllowedMethods) > 0 {
-					w.Header().Set("Access-Control-Allow-Methods", strings.Join(config.AllowedMethods, ", "))
-				}
-
-				// Set allowed headers
-				if len(config.AllowedHeaders) > 0 {
-					w.Header().Set("Access-Control-Allow-Headers", strings.Join(config.AllowedHeaders, ", "))
-				}
-
-				// Set credentials header if enabled
-				if config.AllowCredentials {
-					w.Header().Set("Access-Control-Allow-Credentials", "true")
-				}
-
-				// Set max age for preflight caching
-				if config.MaxAge > 0 {
-					w.Header().Set("Access-Control-Max-Age", strconv.FormatInt(int64(config.MaxAge), 10))
-				}
-			}
-
-			// Handle preflight OPTIONS requests
-			if r.Method == http.MethodOptions {
-				// Return 200 OK for preflight requests
-				w.WriteHeader(http.StatusOK)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
 }

@@ -1,0 +1,31 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: notifier
+  labels:
+    app: notifier
+rules:
+# Permissions for bootstrap admin key creation in Kubernetes secret
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "update", "get", "list"]
+  resourceNames: ["notifier-admin-key"]
+# Allow listing secrets to check if secret exists
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: notifier
+  labels:
+    app: notifier
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: notifier
+subjects:
+- kind: ServiceAccount
+  name: notifier
+  namespace: default

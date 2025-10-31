@@ -6,7 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
+	_ "github.com/lib/pq" // PostgreSQL driver
 )
 
 // KeyStoreDB provides persistent storage for API keys using PostgreSQL
@@ -37,9 +38,10 @@ func NewKeyStoreDB(dbURL string) (*KeyStoreDB, error) {
 	return ks, nil
 }
 
-// initializeSchema creates the necessary tables if they don't exist
+// initializeSchema creates the necessary tables and indexes if they don't exist
 func (ks *KeyStoreDB) initializeSchema() error {
-	schema := `
+	// Create tables
+	tableSchema := `
 	-- API Keys table
 	CREATE TABLE IF NOT EXISTS api_keys (
 		id SERIAL PRIMARY KEY,
@@ -53,11 +55,7 @@ func (ks *KeyStoreDB) initializeSchema() error {
 		is_active BOOLEAN NOT NULL DEFAULT true,
 		rate_limit INTEGER NOT NULL DEFAULT 0,
 		created_by VARCHAR(255),
-		metadata JSONB DEFAULT '{}'::jsonb,
-		INDEX idx_key (key),
-		INDEX idx_client_id (client_id),
-		INDEX idx_active (is_active),
-		INDEX idx_expires (expires_at)
+		metadata JSONB DEFAULT '{}'::jsonb
 	);
 
 	-- Audit log for key operations
@@ -67,14 +65,29 @@ func (ks *KeyStoreDB) initializeSchema() error {
 		action VARCHAR(50) NOT NULL,
 		performed_by VARCHAR(255) NOT NULL,
 		performed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		details JSONB DEFAULT '{}'::jsonb,
-		INDEX idx_key_id (key_id),
-		INDEX idx_performed_at (performed_at)
+		details JSONB DEFAULT '{}'::jsonb
 	);
 	`
 
-	_, err := ks.db.Exec(schema)
-	return err
+	if _, err := ks.db.Exec(tableSchema); err != nil {
+		return fmt.Errorf("failed to create tables: %w", err)
+	}
+
+	// Create indexes separately (PostgreSQL syntax)
+	indexSchema := `
+	CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
+	CREATE INDEX IF NOT EXISTS idx_api_keys_client_id ON api_keys(client_id);
+	CREATE INDEX IF NOT EXISTS idx_api_keys_active ON api_keys(is_active);
+	CREATE INDEX IF NOT EXISTS idx_api_keys_expires ON api_keys(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_api_key_audit_log_key_id ON api_key_audit_log(key_id);
+	CREATE INDEX IF NOT EXISTS idx_api_key_audit_log_performed_at ON api_key_audit_log(performed_at);
+	`
+
+	if _, err := ks.db.Exec(indexSchema); err != nil {
+		return fmt.Errorf("failed to create indexes: %w", err)
+	}
+
+	return nil
 }
 
 // SaveKey persists an API key to the database
@@ -94,7 +107,7 @@ func (ks *KeyStoreDB) SaveKey(ctx context.Context, key *APIKey, createdBy string
 		key.Key,
 		key.Name,
 		key.ClientID,
-		key.Roles,
+		pq.Array(key.Roles), // Convert Go slice to PostgreSQL array
 		key.CreatedAt,
 		key.LastUsedAt,
 		key.ExpiresAt,

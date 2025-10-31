@@ -66,8 +66,24 @@ type HealthCheckConfig struct {
 
 // AuthConfig contains authentication and authorization configuration
 type AuthConfig struct {
-	Enabled          bool `mapstructure:"enabled"`            // Enable API key authentication
-	DefaultRateLimit int  `mapstructure:"default_rate_limit"` // Default rate limit in requests/minute (0 = unlimited)
+	Enabled          bool           `mapstructure:"enabled"`            // Enable API key authentication
+	DefaultRateLimit int            `mapstructure:"default_rate_limit"` // Default rate limit in requests/minute (0 = unlimited)
+	Database         DatabaseConfig `mapstructure:"database"`           // Database configuration for persistent key storage
+	Bootstrap        BootstrapConf  `mapstructure:"bootstrap"`          // Bootstrap admin key configuration
+}
+
+// DatabaseConfig contains database connection configuration
+type DatabaseConfig struct {
+	URL string `mapstructure:"url"` // Database connection URL (e.g., "postgresql://user:pass@host:5432/db")
+}
+
+// BootstrapConf contains configuration for bootstrap admin key creation
+type BootstrapConf struct {
+	Enabled              bool   `mapstructure:"enabled"`                // Enable bootstrap on startup
+	AdminKeyFileName     string `mapstructure:"admin_key_file"`         // File to save the generated admin key
+	PrintToStdout        bool   `mapstructure:"print_to_stdout"`        // Print admin key to stdout (only for setup)
+	KubernetesSecretName string `mapstructure:"kubernetes_secret_name"` // Kubernetes secret name (e.g., "notifier-admin-key")
+	KubernetesSecretKey  string `mapstructure:"kubernetes_secret_key"`  // Key within secret (e.g., "admin-key")
 }
 
 // CORSConfig contains CORS (Cross-Origin Resource Sharing) configuration
@@ -199,8 +215,13 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("health_check.interval", 30)
 
 	// Auth defaults
-	v.SetDefault("auth.enabled", false)          // Authentication disabled by default
-	v.SetDefault("auth.default_rate_limit", 100) // 100 requests per minute default
+	v.SetDefault("auth.enabled", false)                                         // Authentication disabled by default
+	v.SetDefault("auth.default_rate_limit", 100)                                // 100 requests per minute default
+	v.SetDefault("auth.bootstrap.enabled", false)                               // Bootstrap disabled by default
+	v.SetDefault("auth.bootstrap.admin_key_file", "")                           // No file by default
+	v.SetDefault("auth.bootstrap.print_to_stdout", false)                       // Don't print to stdout by default
+	v.SetDefault("auth.bootstrap.kubernetes_secret_name", "notifier-admin-key") // Default secret name
+	v.SetDefault("auth.bootstrap.kubernetes_secret_key", "admin-key")           // Default secret key
 
 	// CORS defaults - secure by default (no origins allowed)
 	v.SetDefault("cors.allowed_origins", []string{})                                // Empty by default - must be explicitly configured
@@ -393,6 +414,27 @@ func (c *Config) Sanitize() map[string]interface{} {
 	}
 
 	sanitized["notifiers"] = notifiers
+
+	// Sanitize auth config
+	sanitized["auth"] = map[string]interface{}{
+		"enabled": c.Auth.Enabled,
+		"bootstrap": map[string]interface{}{
+			"enabled":                c.Auth.Bootstrap.Enabled,
+			"admin_key_file":         c.Auth.Bootstrap.AdminKeyFileName,
+			"print_to_stdout":        c.Auth.Bootstrap.PrintToStdout,
+			"kubernetes_secret_name": c.Auth.Bootstrap.KubernetesSecretName,
+			"kubernetes_secret_key":  c.Auth.Bootstrap.KubernetesSecretKey,
+		},
+	}
+
+	// Sanitize retention config
+	sanitized["retention"] = map[string]interface{}{
+		"enabled":         c.Retention.Enabled,
+		"ttl":             c.Retention.TTL,
+		"check_frequency": c.Retention.CheckFrequency,
+		"max_size":        c.Retention.MaxSize,
+	}
+
 	return sanitized
 }
 

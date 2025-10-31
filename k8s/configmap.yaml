@@ -95,3 +95,23 @@ data:
         - "Authorization"
       allow_credentials: false
       max_age: 3600
+
+    # Authentication and authorization configuration
+    # Uncomment and configure to enable API key authentication
+    # auth:
+    #   enabled: true
+    #   default_rate_limit: 100  # requests per minute
+    #   bootstrap:
+    #     enabled: true
+    #     kubernetes_secret_name: "notifier-admin-key"  # Secret name for storing admin key
+    #     kubernetes_secret_key: "admin-key"             # Key within the secret
+    #     # Optionally save to file as backup
+    #     admin_key_file: "/tmp/notifier-admin-key"
+    #     print_to_stdout: false
+
+    # Notification retention and automatic cleanup configuration
+    retention:
+      enabled: true                  # Enable automatic cleanup of old/expired notifications
+      ttl: "168h"                     # Time-to-live: how long to keep notifications (7 days)
+      check_frequency: "1h"           # How often to run cleanup check
+      max_size: 100000                # Maximum number of notifications to store

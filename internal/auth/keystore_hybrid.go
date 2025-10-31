@@ -12,7 +12,7 @@ import (
 // This ensures consistency: if DB write fails, cache is not updated
 type HybridKeyStore struct {
 	cache *APIKeyStore // In-memory cache for fast lookups
-	db    *KeyStoreDB   // Database backend for persistence
+	db    *KeyStoreDB  // Database backend for persistence
 	mu    sync.RWMutex
 }
 
@@ -128,34 +128,7 @@ func (h *HybridKeyStore) UpdateLastUsed(ctx context.Context, keyStr string) erro
 
 // CheckRateLimit checks if a key has exceeded its rate limit
 func (h *HybridKeyStore) CheckRateLimit(keyStr string) (bool, error) {
-	h.cache.mu.RLock()
-	defer h.cache.mu.RUnlock()
-
-	limiter, exists := h.cache.rateLimits[keyStr]
-	if !exists {
-		return false, fmt.Errorf("rate limiter not found")
-	}
-
-	// Check if we're under the rate limit
-	if limiter.maxRequests == 0 {
-		return true, nil // Unlimited
-	}
-
-	limiter.mu.Lock()
-	defer limiter.mu.Unlock()
-
-	now := time.Now()
-	if now.After(limiter.resetTime) {
-		limiter.resetTime = now.Add(limiter.window)
-		limiter.count = 0
-	}
-
-	if limiter.count >= limiter.maxRequests {
-		return false, nil
-	}
-
-	limiter.count++
-	return true, nil
+	return h.cache.CheckRateLimit(keyStr)
 }
 
 // GetAuditLog retrieves audit log for a key

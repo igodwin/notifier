@@ -92,6 +92,26 @@ notifiers:
     #   default_topic: "company-notifications"
     #   insecure_skip_verify: false  # Set to true for self-signed certs
 
+# Authentication and authorization configuration
+# auth:
+#   enabled: false  # Enable API key authentication
+#   default_rate_limit: 100  # Default requests per minute (0 = unlimited)
+#   bootstrap:
+#     enabled: false  # Enable bootstrap admin key creation on startup
+#     admin_key_file: "/tmp/notifier-admin-key"  # Save generated key to this file
+#     print_to_stdout: false  # Print key to stdout (DANGER: only for setup)
+#
+# Example with bootstrap enabled for testing:
+# auth:
+#   enabled: true
+#   default_rate_limit: 100
+#   database:
+#     url: "postgresql://user:password@localhost:5432/notifier"
+#   bootstrap:
+#     enabled: true
+#     admin_key_file: "/tmp/notifier-admin-key"
+#     print_to_stdout: true
+
 logging:
   level: "info" # Options: debug, info, warn, error
   format: "json" # Options: json, text

@@ -88,11 +88,73 @@ func main() {
 
 	// Initialize authentication if enabled (must be before service creation for RBAC)
 	var authStore *auth.APIKeyStore
+	var hybridKeyStore *auth.HybridKeyStore
 	var authz *auth.NotifierAuthz
 	if cfg.Auth.Enabled {
 		authStore = auth.NewAPIKeyStore()
 		authz = auth.NewNotifierAuthz()
 		logger.Info("API authentication enabled")
+
+		// Create database backend if configured
+		var dbStore *auth.KeyStoreDB
+		if cfg.Auth.Database.URL != "" {
+			dbStore, err = auth.NewKeyStoreDB(cfg.Auth.Database.URL)
+			if err != nil {
+				logger.Fatalf("Failed to create database key store: %v", err)
+			}
+			logger.Infof("Connected to authentication database: %s", cfg.Auth.Database.URL)
+		} else {
+			logger.Warn("No database configured for authentication - API keys will only be stored in memory")
+		}
+
+		// Create hybrid key store for key management (in-memory cache + database backend)
+		hybridKeyStore = auth.NewHybridKeyStore(authStore, dbStore)
+		logger.Debugf("Initialized hybrid key store for API key management")
+
+		// Bootstrap admin key if configured
+		if cfg.Auth.Bootstrap.Enabled {
+			bootstrapCfg := &auth.BootstrapConfig{
+				Enabled:          cfg.Auth.Bootstrap.Enabled,
+				AdminKeyFileName: cfg.Auth.Bootstrap.AdminKeyFileName,
+				PrintToStdout:    cfg.Auth.Bootstrap.PrintToStdout,
+			}
+
+			// Try to load existing key from Kubernetes secret first
+			existingKey, err := auth.LoadAdminKeyFromKubernetesSecret(
+				ctx,
+				cfg.Auth.Bootstrap.KubernetesSecretName,
+				cfg.Auth.Bootstrap.KubernetesSecretKey,
+				logger,
+			)
+			if err != nil {
+				logger.Warnf("Error loading from Kubernetes secret: %v", err)
+			}
+
+			// If we have an existing key, use it
+			if existingKey != "" {
+				if _, err := auth.RegisterAdminKeyInMemory(authStore, existingKey, logger); err != nil {
+					logger.Warnf("Failed to register existing admin key: %v", err)
+				}
+			} else {
+				// Generate new key
+				if apiKey, err := auth.BootstrapAdminKeyInMemory(authStore, bootstrapCfg, logger); err != nil {
+					logger.Warnf("Bootstrap admin key creation failed: %v", err)
+				} else if apiKey != nil {
+					// Store in Kubernetes secret if configured
+					if cfg.Auth.Bootstrap.KubernetesSecretName != "" {
+						if err := auth.CreateKubernetesSecret(
+							ctx,
+							cfg.Auth.Bootstrap.KubernetesSecretName,
+							cfg.Auth.Bootstrap.KubernetesSecretKey,
+							apiKey.Key,
+							logger,
+						); err != nil {
+							logger.Warnf("Failed to create Kubernetes secret: %v", err)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// Initialize notifier factory and register notifiers
@@ -144,7 +206,7 @@ func main() {
 	var restServer *http.Server
 	if cfg.Server.Mode == "both" || cfg.Server.Mode == "rest" {
 		wg.Add(1)
-		restServer = startRESTServer(ctx, &wg, cfg, svc, logger, authStore)
+		restServer = startRESTServer(ctx, &wg, cfg, svc, logger, authStore, hybridKeyStore)
 	}
 
 	// Wait for interrupt signal
@@ -284,25 +346,15 @@ func startGRPCServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config
 	return grpcServer
 }
 
-func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore) *http.Server {
-	// Convert config CORS to rest.CORSConfig
-	corsConfig := &rest.CORSConfig{
-		AllowedOrigins:   cfg.CORS.AllowedOrigins,
-		AllowedMethods:   cfg.CORS.AllowedMethods,
-		AllowedHeaders:   cfg.CORS.AllowedHeaders,
-		AllowCredentials: cfg.CORS.AllowCredentials,
-		MaxAge:           cfg.CORS.MaxAge,
-	}
-
-	// Log CORS configuration
-	if len(cfg.CORS.AllowedOrigins) > 0 {
-		logger.Infof("CORS enabled for origins: %v", cfg.CORS.AllowedOrigins)
+func startRESTServer(ctx context.Context, wg *sync.WaitGroup, cfg *config.Config, svc domain.NotificationService, logger *logging.Logger, authStore *auth.APIKeyStore, hybridKeyStore *auth.HybridKeyStore) *http.Server {
+	var router *mux.Router
+	if authStore != nil && hybridKeyStore != nil {
+		router = rest.NewRouterWithAuthAndKeyStore(svc, logger, authStore, hybridKeyStore)
+	} else if authStore != nil {
+		router = rest.NewRouterWithAuth(svc, logger, authStore)
 	} else {
-		logger.Warn("CORS has no allowed origins configured - all cross-origin requests will be blocked")
+		router = rest.NewRouter(svc, logger)
 	}
-
-	// Create router with auth and CORS config
-	router := rest.NewRouterWithAuth(svc, logger, authStore, corsConfig)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.RESTPort)
 	server := &http.Server{

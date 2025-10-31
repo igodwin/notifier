@@ -27,21 +27,21 @@ func NewKeyManagementHandler(keyStore *auth.HybridKeyStore, logger *logging.Logg
 
 // CreateKeyRequest is the request body for creating a new API key
 type CreateKeyRequest struct {
-	ClientID  string        `json:"client_id"`
-	Roles     []string      `json:"roles"`
-	RateLimit int           `json:"rate_limit,omitempty"`
-	ExpiresIn *time.Duration `json:"expires_in,omitempty"`
+	ClientID  string   `json:"client_id"`
+	Roles     []string `json:"roles"`
+	RateLimit int      `json:"rate_limit,omitempty"`
+	ExpiresIn string   `json:"expires_in,omitempty"` // Duration string like "8760h", "30d", "1h", etc.
 }
 
 // CreateKeyResponse is the response body when creating an API key
 type CreateKeyResponse struct {
-	Key       string    `json:"key"`
-	Name      string    `json:"name"`
-	ClientID  string    `json:"client_id"`
-	Roles     []string  `json:"roles"`
-	CreatedAt time.Time `json:"created_at"`
+	Key       string     `json:"key"`
+	Name      string     `json:"name"`
+	ClientID  string     `json:"client_id"`
+	Roles     []string   `json:"roles"`
+	CreatedAt time.Time  `json:"created_at"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
-	RateLimit int       `json:"rate_limit"`
+	RateLimit int        `json:"rate_limit"`
 }
 
 // ListKeysResponse is the response body for listing API keys
@@ -103,8 +103,19 @@ func (h *KeyManagementHandler) CreateKey(w http.ResponseWriter, r *http.Request)
 		req.RateLimit = 100
 	}
 
+	// Parse expires_in duration string if provided
+	var expiresInDuration *time.Duration
+	if req.ExpiresIn != "" {
+		duration, err := time.ParseDuration(req.ExpiresIn)
+		if err != nil {
+			h.respondError(w, http.StatusBadRequest, "Invalid expires_in format", fmt.Sprintf("expected duration format like '8760h' or '30d': %v", err))
+			return
+		}
+		expiresInDuration = &duration
+	}
+
 	// Create the key
-	apiKey, err := h.keyStore.CreateKey(ctx, req.ClientID, req.Roles, req.RateLimit, req.ExpiresIn, authCtx.ClientID)
+	apiKey, err := h.keyStore.CreateKey(ctx, req.ClientID, req.Roles, req.RateLimit, expiresInDuration, authCtx.ClientID)
 	if err != nil {
 		h.logger.Errorf("Failed to create API key: %v", err)
 		h.respondError(w, http.StatusInternalServerError, "Failed to create API key", err.Error())
