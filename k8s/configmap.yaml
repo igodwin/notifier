@@ -66,3 +66,32 @@ data:
       port: 8081
       path: "/health"
       interval: 30
+
+    # CORS (Cross-Origin Resource Sharing) configuration
+    # Only needed if web browsers will access the REST API
+    # For backend-only services using gRPC, CORS is not required
+    cors:
+      # Whitelist of allowed origins - wildcards (*) are NOT supported
+      # Leave empty if you don't have web browser clients
+      allowed_origins: []
+
+      # If you have a web frontend, add its domain(s) here:
+      # allowed_origins:
+      #   - "https://app.example.com"
+      #   - "https://dashboard.example.com"
+
+      # For local development:
+      # allowed_origins:
+      #   - "http://localhost:3000"
+      #   - "http://localhost:8080"
+
+      allowed_methods:
+        - "GET"
+        - "POST"
+        - "OPTIONS"
+        - "DELETE"
+      allowed_headers:
+        - "Content-Type"
+        - "Authorization"
+      allow_credentials: false
+      max_age: 3600
