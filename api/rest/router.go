@@ -86,18 +86,31 @@ func NewRouterWithAuthAndKeyStore(service domain.NotificationService, logger *lo
 		keyHandler := NewKeyManagementHandler(keyStore, logger)
 		v1.HandleFunc("/admin/keys", keyHandler.CreateKey).Methods(http.MethodPost)
 		v1.HandleFunc("/admin/keys", keyHandler.ListKeys).Methods(http.MethodGet)
-		v1.HandleFunc("/admin/keys/{key}", keyHandler.RevokeKey).Methods(http.MethodDelete)
-		v1.HandleFunc("/admin/keys/{key}/rotate", keyHandler.RotateKey).Methods(http.MethodPost)
-		v1.HandleFunc("/admin/keys/{key}/audit", keyHandler.GetAuditLog).Methods(http.MethodGet)
+		v1.HandleFunc("/admin/keys/{name}", keyHandler.RevokeKey).Methods(http.MethodDelete)
+		v1.HandleFunc("/admin/keys/{name}/rotate", keyHandler.RotateKey).Methods(http.MethodPost)
+		v1.HandleFunc("/admin/keys/{name}/audit", keyHandler.GetAuditLog).Methods(http.MethodGet)
 	}
 
 	// Health check route (no auth required)
 	router.HandleFunc("/health", handler.HealthCheck).Methods(http.MethodGet)
 
-	// Middleware - logging and CORS
+	// Middleware - logging, request size limit, and CORS
 	router.Use(loggingMiddleware)
+	v1.Use(maxBodySizeMiddleware(1 << 20)) // 1 MB limit on API request bodies
 
 	return router
+}
+
+// maxBodySizeMiddleware limits the size of incoming request bodies to prevent DoS.
+func maxBodySizeMiddleware(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // loggingMiddleware logs incoming requests

@@ -35,7 +35,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
     -o server ./cmd/server
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:3.21
 
 # Install runtime dependencies
 RUN apk --no-cache add ca-certificates tzdata

@@ -347,6 +347,89 @@ func (ks *KeyStoreDB) GetAuditLog(ctx context.Context, keyStr string, limit int)
 	return logs, rows.Err()
 }
 
+// GetKeyByName retrieves an API key by its name
+func (ks *KeyStoreDB) GetKeyByName(ctx context.Context, name string) (*APIKey, error) {
+	query := `
+	SELECT key, name, client_id, roles, created_at, last_used_at, expires_at, is_active, rate_limit
+	FROM api_keys
+	WHERE name = $1
+	`
+
+	var key APIKey
+	var roles []string
+
+	err := ks.db.QueryRowContext(ctx, query, name).Scan(
+		&key.Key,
+		&key.Name,
+		&key.ClientID,
+		pq.Array(&roles),
+		&key.CreatedAt,
+		&key.LastUsedAt,
+		&key.ExpiresAt,
+		&key.IsActive,
+		&key.RateLimit,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrKeyNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key by name: %w", err)
+	}
+
+	key.Roles = roles
+	return &key, nil
+}
+
+// DeactivateKeyByName disables an API key by its name
+func (ks *KeyStoreDB) DeactivateKeyByName(ctx context.Context, name string, deactivatedBy string) error {
+	// First get the key to find its raw key for cache invalidation and audit
+	key, err := ks.GetKeyByName(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	return ks.DeactivateKey(ctx, key.Key, deactivatedBy)
+}
+
+// GetAuditLogByName retrieves audit log entries for a key identified by name
+func (ks *KeyStoreDB) GetAuditLogByName(ctx context.Context, name string, limit int) ([]map[string]interface{}, error) {
+	query := `
+	SELECT al.action, al.performed_by, al.performed_at, al.details
+	FROM api_key_audit_log al
+	JOIN api_keys ak ON al.key_id = ak.id
+	WHERE ak.name = $1
+	ORDER BY al.performed_at DESC
+	LIMIT $2
+	`
+
+	rows, err := ks.db.QueryContext(ctx, query, name, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get audit log: %w", err)
+	}
+	defer rows.Close()
+
+	var logs []map[string]interface{}
+	for rows.Next() {
+		var action, performedBy, details string
+		var performedAt time.Time
+
+		err := rows.Scan(&action, &performedBy, &performedAt, &details)
+		if err != nil {
+			return nil, err
+		}
+
+		logs = append(logs, map[string]interface{}{
+			"action":       action,
+			"performed_by": performedBy,
+			"performed_at": performedAt,
+			"details":      details,
+		})
+	}
+
+	return logs, rows.Err()
+}
+
 // Custom errors
 var (
 	ErrKeyNotFound = fmt.Errorf("API key not found")

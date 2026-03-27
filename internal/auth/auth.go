@@ -115,24 +115,29 @@ func (s *APIKeyStore) ValidateKey(keyStr string) (*APIKey, error) {
 
 // CheckRateLimit checks if a key has exceeded its rate limit
 func (s *APIKeyStore) CheckRateLimit(keyStr string) (bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+	// Look up key and limiter under the store lock, then release it
+	// before acquiring the per-key limiter lock to avoid nested locking.
+	s.mu.RLock()
 	key, exists := s.keys[keyStr]
 	if !exists {
+		s.mu.RUnlock()
 		return false, fmt.Errorf("invalid API key")
 	}
 
 	// Unlimited rate limit
 	if key.RateLimit <= 0 {
+		s.mu.RUnlock()
 		return true, nil
 	}
 
 	limiter, exists := s.rateLimits[keyStr]
 	if !exists {
+		s.mu.RUnlock()
 		return false, fmt.Errorf("rate limiter not found")
 	}
+	s.mu.RUnlock()
 
+	// Now lock only the per-key rate limiter
 	limiter.mu.Lock()
 	defer limiter.mu.Unlock()
 
@@ -206,13 +211,16 @@ func (s *APIKeyStore) ListKeys(clientID string) []*APIKey {
 	return keys
 }
 
+// authContextKey is an unexported type for context keys to avoid collisions.
+type authContextKey struct{}
+
 // ContextWithAuth adds auth context to a request context
 func ContextWithAuth(ctx context.Context, auth *AuthContext) context.Context {
-	return context.WithValue(ctx, "auth", auth)
+	return context.WithValue(ctx, authContextKey{}, auth)
 }
 
 // GetAuthContext retrieves auth context from a request context
 func GetAuthContext(ctx context.Context) (*AuthContext, bool) {
-	auth, ok := ctx.Value("auth").(*AuthContext)
+	auth, ok := ctx.Value(authContextKey{}).(*AuthContext)
 	return auth, ok
 }

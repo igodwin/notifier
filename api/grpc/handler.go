@@ -8,6 +8,8 @@ import (
 	pb "github.com/igodwin/notifier/api/grpc/pb"
 	"github.com/igodwin/notifier/internal/domain"
 	"github.com/igodwin/notifier/internal/logging"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -82,12 +84,7 @@ func (h *NotifierHandler) SendNotification(ctx context.Context, req *pb.SendNoti
 	if err != nil {
 		h.logger.Errorf("gRPC: Failed to send notification - type=%s, account=%s, error=%v",
 			req.Type, req.Account, err)
-		return &pb.SendNotificationResponse{
-			Result: &pb.NotificationResult{
-				Success: false,
-				Error:   err.Error(),
-			},
-		}, nil
+		return nil, status.Errorf(codes.Internal, "failed to send notification: %v", err)
 	}
 
 	// Log success
@@ -139,7 +136,7 @@ func (h *NotifierHandler) SendBatchNotifications(ctx context.Context, req *pb.Se
 func (h *NotifierHandler) GetNotification(ctx context.Context, req *pb.GetNotificationRequest) (*pb.GetNotificationResponse, error) {
 	notification, err := h.service.GetNotification(ctx, req.Id)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.NotFound, "notification not found: %v", err)
 	}
 
 	return &pb.GetNotificationResponse{
@@ -154,7 +151,7 @@ func (h *NotifierHandler) ListNotifications(ctx context.Context, req *pb.ListNot
 
 	notifications, err := h.service.ListNotifications(ctx, filter)
 	if err != nil {
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "failed to list notifications: %v", err)
 	}
 
 	protoNotifications := make([]*pb.Notification, len(notifications))
@@ -230,7 +227,7 @@ func (h *NotifierHandler) GetNotifiers(ctx context.Context, req *pb.GetNotifiers
 	notifiers, err := h.service.GetNotifiers(ctx)
 	if err != nil {
 		h.logger.Errorf("gRPC: Failed to get notifiers - error=%v", err)
-		return nil, err
+		return nil, status.Errorf(codes.Internal, "failed to get notifiers: %v", err)
 	}
 
 	// Convert domain notifiers to proto notifiers

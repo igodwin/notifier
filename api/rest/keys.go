@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/igodwin/notifier/internal/auth"
 	"github.com/igodwin/notifier/internal/logging"
 )
@@ -76,7 +77,7 @@ func (h *KeyManagementHandler) CreateKey(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 
 	// Check authorization - must have admin role
-	authCtx, ok := ctx.Value("auth").(*auth.AuthContext)
+	authCtx, ok := auth.GetAuthContext(ctx)
 	if !ok || !h.hasRole(authCtx, "admin") {
 		h.respondError(w, http.StatusForbidden, "Insufficient permissions", "admin role required")
 		return
@@ -143,7 +144,7 @@ func (h *KeyManagementHandler) CreateKey(w http.ResponseWriter, r *http.Request)
 func (h *KeyManagementHandler) ListKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	authCtx, ok := ctx.Value("auth").(*auth.AuthContext)
+	authCtx, ok := auth.GetAuthContext(ctx)
 	if !ok {
 		h.respondError(w, http.StatusUnauthorized, "Unauthorized", "")
 		return
@@ -193,24 +194,25 @@ type RevokeKeyRequest struct {
 }
 
 // RevokeKey deactivates an API key
-// DELETE /api/v1/admin/keys/:key
+// DELETE /api/v1/admin/keys/:name
 // Requires: admin role
 func (h *KeyManagementHandler) RevokeKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	authCtx, ok := ctx.Value("auth").(*auth.AuthContext)
+	authCtx, ok := auth.GetAuthContext(ctx)
 	if !ok || !h.hasRole(authCtx, "admin") {
 		h.respondError(w, http.StatusForbidden, "Insufficient permissions", "admin role required")
 		return
 	}
 
-	// Extract key from path parameter
-	keyStr := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/keys/")
+	// Extract key name from path parameter (not the raw key, to avoid leaking secrets in URLs)
+	vars := mux.Vars(r)
+	keyName := vars["name"]
 
 	var req RevokeKeyRequest
 	_ = json.NewDecoder(r.Body).Decode(&req) // Ignore decode errors, reason is optional
 
-	err := h.keyStore.DeactivateKey(ctx, keyStr, authCtx.ClientID)
+	err := h.keyStore.DeactivateKeyByName(ctx, keyName, authCtx.ClientID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			h.respondError(w, http.StatusNotFound, "Key not found", "")
@@ -231,19 +233,19 @@ type RotateKeyRequest struct {
 }
 
 // RotateKey creates a new API key to replace the old one
-// POST /api/v1/admin/keys/:key/rotate
+// POST /api/v1/admin/keys/:name/rotate
 // Requires: admin role
 func (h *KeyManagementHandler) RotateKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	authCtx, ok := ctx.Value("auth").(*auth.AuthContext)
+	authCtx, ok := auth.GetAuthContext(ctx)
 	if !ok || !h.hasRole(authCtx, "admin") {
 		h.respondError(w, http.StatusForbidden, "Insufficient permissions", "admin role required")
 		return
 	}
 
-	oldKeyStr := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/keys/")
-	oldKeyStr = strings.TrimSuffix(oldKeyStr, "/rotate")
+	vars := mux.Vars(r)
+	_ = vars["name"] // Key name from URL (rotation not yet implemented)
 
 	var req RotateKeyRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
@@ -265,19 +267,19 @@ type GetAuditLogResponse struct {
 }
 
 // GetAuditLog retrieves the audit log for a key
-// GET /api/v1/admin/keys/:key/audit
+// GET /api/v1/admin/keys/:name/audit
 // Requires: admin role
 func (h *KeyManagementHandler) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	authCtx, ok := ctx.Value("auth").(*auth.AuthContext)
+	authCtx, ok := auth.GetAuthContext(ctx)
 	if !ok || !h.hasRole(authCtx, "admin") {
 		h.respondError(w, http.StatusForbidden, "Insufficient permissions", "admin role required")
 		return
 	}
 
-	keyStr := strings.TrimPrefix(r.URL.Path, "/api/v1/admin/keys/")
-	keyStr = strings.TrimSuffix(keyStr, "/audit")
+	vars := mux.Vars(r)
+	keyName := vars["name"]
 
 	limit := 100
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
@@ -286,7 +288,7 @@ func (h *KeyManagementHandler) GetAuditLog(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	logs, err := h.keyStore.GetAuditLog(ctx, keyStr, limit)
+	logs, err := h.keyStore.GetAuditLogByName(ctx, keyName, limit)
 	if err != nil {
 		h.logger.Errorf("Failed to get audit log: %v", err)
 		h.respondError(w, http.StatusInternalServerError, "Failed to get audit log", err.Error())
@@ -294,7 +296,7 @@ func (h *KeyManagementHandler) GetAuditLog(w http.ResponseWriter, r *http.Reques
 	}
 
 	resp := GetAuditLogResponse{
-		Key:      "nk_" + keyStr[len(keyStr)-4:],
+		Key:      keyName,
 		AuditLog: logs,
 	}
 

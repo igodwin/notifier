@@ -50,6 +50,8 @@ spec:
           readOnly: true
         - name: queue-storage
           mountPath: /var/lib/notifier
+        - name: tmp
+          mountPath: /tmp
         resources:
           requests:
             cpu: 100m
@@ -77,7 +79,7 @@ spec:
           runAsNonRoot: true
           runAsUser: 1000
           allowPrivilegeEscalation: false
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
           capabilities:
             drop:
             - ALL
@@ -86,6 +88,8 @@ spec:
         configMap:
           name: notifier-config
       - name: queue-storage
+        emptyDir: {}
+      - name: tmp
         emptyDir: {}
       restartPolicy: Always
 ---

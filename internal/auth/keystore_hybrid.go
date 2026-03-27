@@ -136,6 +136,32 @@ func (h *HybridKeyStore) GetAuditLog(ctx context.Context, keyStr string, limit i
 	return h.db.GetAuditLog(ctx, keyStr, limit)
 }
 
+// DeactivateKeyByName deactivates a key by its name (avoids exposing raw key in URLs)
+func (h *HybridKeyStore) DeactivateKeyByName(ctx context.Context, name string, deactivatedBy string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	// Look up the key by name in DB to get the raw key for cache invalidation
+	key, err := h.db.GetKeyByName(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	// Remove from cache
+	h.cache.mu.Lock()
+	delete(h.cache.keys, key.Key)
+	delete(h.cache.rateLimits, key.Key)
+	h.cache.mu.Unlock()
+
+	// Deactivate in database
+	return h.db.DeactivateKey(ctx, key.Key, deactivatedBy)
+}
+
+// GetAuditLogByName retrieves audit log for a key identified by name
+func (h *HybridKeyStore) GetAuditLogByName(ctx context.Context, name string, limit int) ([]map[string]interface{}, error) {
+	return h.db.GetAuditLogByName(ctx, name, limit)
+}
+
 // Close closes the database connection
 func (h *HybridKeyStore) Close() error {
 	return h.db.Close()

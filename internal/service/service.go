@@ -276,6 +276,16 @@ func (s *NotificationService) processNotification(ctx context.Context, msg *doma
 
 // Send queues a notification for delivery
 func (s *NotificationService) Send(ctx context.Context, notification *domain.Notification) (*domain.NotificationResult, error) {
+	// Enforce RBAC authorization if configured
+	if err := s.checkAuthorization(ctx, notification); err != nil {
+		return &domain.NotificationResult{
+			NotificationID: notification.ID,
+			Success:        false,
+			Error:          err.Error(),
+			SentAt:         time.Now(),
+		}, err
+	}
+
 	// Store the notification
 	s.storeNotification(notification)
 
@@ -300,6 +310,13 @@ func (s *NotificationService) Send(ctx context.Context, notification *domain.Not
 // SendBatch queues multiple notifications for delivery
 func (s *NotificationService) SendBatch(ctx context.Context, notifications []*domain.Notification) ([]*domain.NotificationResult, error) {
 	results := make([]*domain.NotificationResult, 0, len(notifications))
+
+	// Enforce RBAC authorization for each notification
+	for _, notification := range notifications {
+		if err := s.checkAuthorization(ctx, notification); err != nil {
+			return nil, fmt.Errorf("authorization denied for notification type=%s account=%s: %w", notification.Type, notification.Account, err)
+		}
+	}
 
 	// Store all notifications
 	for _, notification := range notifications {
@@ -439,12 +456,7 @@ func (s *NotificationService) GetStats(ctx context.Context) (*domain.Notificatio
 // GetNotifiers returns information about available notifiers, filtered by authorization if auth context is provided
 func (s *NotificationService) GetNotifiers(ctx context.Context) (*domain.NotifiersResponse, error) {
 	// Extract auth context from request context if available
-	var authCtx *auth.AuthContext
-	if authVal := ctx.Value("auth"); authVal != nil {
-		if ac, ok := authVal.(*auth.AuthContext); ok {
-			authCtx = ac
-		}
-	}
+	authCtx, _ := auth.GetAuthContext(ctx)
 
 	supportedTypes := s.factory.SupportedTypes()
 	notifiers := make([]domain.NotifierInfo, 0, len(supportedTypes))
@@ -508,6 +520,30 @@ func (s *NotificationService) updateNotification(notification *domain.Notificati
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.notifications[notification.ID] = notification
+}
+
+// checkAuthorization verifies that the caller is authorized to send to the given notifier/account.
+// Returns nil if authorized or if RBAC is not configured.
+func (s *NotificationService) checkAuthorization(ctx context.Context, notification *domain.Notification) error {
+	if s.authz == nil || !s.authz.HasRules() {
+		return nil // RBAC not configured
+	}
+
+	authCtx, ok := auth.GetAuthContext(ctx)
+	if !ok {
+		return nil // No auth context (auth may be disabled)
+	}
+
+	account := notification.Account
+	if account == "" && s.accountResolver != nil {
+		account = s.accountResolver.GetDefaultAccount(notification.Type)
+	}
+
+	if !s.authz.IsAuthorized(authCtx, notification.Type, account) {
+		return fmt.Errorf("not authorized to send %s notifications to account %s", notification.Type, account)
+	}
+
+	return nil
 }
 
 // matchesFilter checks if a notification matches the filter
