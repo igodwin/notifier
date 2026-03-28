@@ -1,6 +1,9 @@
-.PHONY: proto proto-gen proto-clean deps build build-dev run run-grpc run-rest test lint fmt vet check docker-build docker-build-dev docker-run clean help
+.PHONY: proto proto-gen proto-clean deps build build-dev run run-grpc run-rest test lint fmt vet check docker-build docker-build-dev docker-buildx-setup docker-buildx docker-run clean help
 
 # Variables
+REGISTRY ?=
+IMAGE ?=
+PLATFORMS ?= linux/amd64,linux/arm64
 PROTO_DIR=api/grpc
 PROTO_FILE=$(PROTO_DIR)/notifier.proto
 PROTO_OUT=$(PROTO_DIR)/pb
@@ -9,8 +12,8 @@ GO_FILES=$(shell find . -type f -name '*.go' -not -path "./vendor/*" -not -path 
 
 # Build information
 VERSION ?= dev
-GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_TIME := $(shell date -u '+%Y-%m-%d_%H:%M:%S_UTC')
+GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILD_TIME := $(shell date -u "+%Y-%m-%d_%H:%M:%S_UTC" 2>/dev/null || echo unknown)
 
 # Base LDFLAGS (version info only)
 LDFLAGS_BASE := -X main.Version=$(VERSION) -X main.GitCommit=$(GIT_COMMIT) -X main.BuildTime=$(BUILD_TIME)
@@ -166,6 +169,33 @@ docker-build-dev:
 		-t notifier:latest-dev .
 	@echo "Docker image built successfully (development)"
 
+# Set up Docker buildx builder for multi-arch builds
+docker-buildx-setup:
+	@echo "Setting up Docker buildx builder..."
+	@docker buildx inspect multiarch > /dev/null 2>&1 || docker buildx create --name multiarch --use
+	@docker buildx inspect multiarch --bootstrap
+	@echo "Buildx builder ready"
+
+# Build and push multi-arch Docker image
+docker-buildx:
+ifndef IMAGE
+	$(error IMAGE is required. Usage: make docker-buildx IMAGE=registry.example.com/org/notifier VERSION=v0.1.0)
+endif
+	@echo "Building and pushing multi-arch Docker image..."
+	@echo "Version: $(VERSION)"
+	@echo "Platforms: $(PLATFORMS)"
+	@echo "Image: $(IMAGE):$(VERSION)"
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		--build-arg BUILD_FLAGS="-s -w" \
+		--tag $(IMAGE):$(VERSION) \
+		--tag $(IMAGE):latest \
+		--push .
+	@echo "Multi-arch image pushed successfully"
+
 # Run Docker container
 docker-run:
 	@echo "Running Docker container..."
@@ -212,5 +242,13 @@ help:
 	@echo "  deps             - Install Go dependencies"
 	@echo ""
 	@echo "Docker:"
-	@echo "  docker-build     - Build Docker image"
-	@echo "  docker-run       - Run Docker container"
+	@echo "  docker-build        - Build Docker image (single arch)"
+	@echo "  docker-build-dev    - Build Docker image with debug symbols"
+	@echo "  docker-buildx-setup - Set up buildx builder for multi-arch"
+	@echo "  docker-buildx       - Build and push multi-arch image (amd64+arm64)"
+	@echo "  docker-run          - Run Docker container locally"
+	@echo ""
+	@echo "Variables:"
+	@echo "  VERSION    - Image version tag (default: dev)"
+	@echo "  IMAGE      - Full image name (required for buildx, e.g. registry.example.com/org/notifier)"
+	@echo "  PLATFORMS  - Build platforms (default: $(PLATFORMS))"

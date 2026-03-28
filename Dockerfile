@@ -30,7 +30,9 @@ COPY . .
 RUN make proto-gen
 
 # Build binary with version information
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo \
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -installsuffix cgo \
     -ldflags "-X main.Version=${VERSION} -X main.GitCommit=${GIT_COMMIT} -X main.BuildTime=${BUILD_TIME} ${BUILD_FLAGS}" \
     -o server ./cmd/server
 
