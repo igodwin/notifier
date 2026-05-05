@@ -181,6 +181,20 @@ func createNtfyHTTPClient(config *NtfyConfig) (*http.Client, error) {
 	}, nil
 }
 
+// Validate overrides BaseNotifier.Validate to allow 0 recipients when a DefaultTopic is configured.
+func (n *NtfyNotifier) Validate(notification *domain.Notification) error {
+	if notification == nil {
+		return fmt.Errorf("notification is nil")
+	}
+	if notification.Type != domain.TypeNtfy {
+		return fmt.Errorf("notification type mismatch: expected %s, got %s", domain.TypeNtfy, notification.Type)
+	}
+	if len(notification.Recipients) == 0 && n.config.DefaultTopic == "" {
+		return fmt.Errorf("notification has no recipients and no default topic is configured")
+	}
+	return nil
+}
+
 // Send sends a notification via ntfy
 func (n *NtfyNotifier) Send(ctx context.Context, notification *domain.Notification) (*domain.NotificationResult, error) {
 	if err := ValidateContext(ctx); err != nil {

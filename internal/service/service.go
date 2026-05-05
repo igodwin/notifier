@@ -243,9 +243,11 @@ func (s *NotificationService) processNotification(ctx context.Context, msg *doma
 
 	// Send the notification
 	result, err := notifier.Send(ctx, notification)
-	if err != nil || !result.Success {
+	if err != nil || result == nil || !result.Success {
 		notification.RetryCount++
-		notification.LastError = result.Error
+		if result != nil {
+			notification.LastError = result.Error
+		}
 		if err != nil {
 			notification.LastError = err.Error()
 		}
