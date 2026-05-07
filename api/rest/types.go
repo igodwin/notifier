@@ -16,7 +16,8 @@ type SendNotificationRequest struct {
 	Priority     int                    `json:"priority,omitempty"`
 	Subject      string                 `json:"subject"`
 	Body         string                 `json:"body"`
-	ContentType  string                 `json:"content_type,omitempty"` // "text" or "html" - auto-detected if not specified
+	HTMLBody     string                 `json:"html_body,omitempty"`    // Optional HTML body for email; if set, sends multipart/alternative.
+	ContentType  string                 `json:"content_type,omitempty"` // Deprecated: prefer html_body. "text" or "html".
 	Recipients   []string               `json:"recipients"`
 	CC           []string               `json:"cc,omitempty"`  // Carbon copy recipients (email only)
 	BCC          []string               `json:"bcc,omitempty"` // Blind carbon copy recipients (email only)
@@ -75,6 +76,7 @@ func (r *SendNotificationRequest) ToNotification() *domain.Notification {
 		Status:       domain.StatusPending,
 		Subject:      r.Subject,
 		Body:         r.Body,
+		HTMLBody:     r.HTMLBody,
 		ContentType:  contentType,
 		Recipients:   r.Recipients,
 		CC:           r.CC,
@@ -111,6 +113,7 @@ type Notification struct {
 	Status       string                 `json:"status"`
 	Subject      string                 `json:"subject"`
 	Body         string                 `json:"body"`
+	HTMLBody     string                 `json:"html_body,omitempty"`
 	ContentType  string                 `json:"content_type,omitempty"`
 	Recipients   []string               `json:"recipients"`
 	CC           []string               `json:"cc,omitempty"`
@@ -134,6 +137,7 @@ func NotificationFromDomain(n *domain.Notification) Notification {
 		Status:       string(n.Status),
 		Subject:      n.Subject,
 		Body:         n.Body,
+		HTMLBody:     n.HTMLBody,
 		ContentType:  string(n.ContentType),
 		Recipients:   n.Recipients,
 		CC:           n.CC,

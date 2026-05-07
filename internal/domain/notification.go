@@ -68,8 +68,13 @@ type Notification struct {
 	// Body is the main content of the notification
 	Body string `json:"body"`
 
-	// ContentType specifies the format of the body (text or html)
-	// Defaults to "text" if not specified. HTML is auto-detected if body starts with < or contains HTML tags.
+	// HTMLBody is an optional HTML body for email notifications. If non-empty, the email is
+	// sent as multipart/alternative with Body as text/plain and HTMLBody as text/html.
+	// Ignored for non-email notification types.
+	HTMLBody string `json:"html_body,omitempty"`
+
+	// ContentType specifies the format of the body (text or html).
+	// Deprecated: prefer setting HTMLBody alongside a plain-text Body.
 	ContentType ContentType `json:"content_type,omitempty"`
 
 	// Recipients contains the target addresses (email, slack channel, ntfy topic, etc.)

@@ -145,18 +145,15 @@ func (s *SMTPNotifier) buildMessage(notification *domain.Notification) string {
 	builder.WriteString(fmt.Sprintf("Subject: %s\r\n", notification.Subject))
 	builder.WriteString("MIME-Version: 1.0\r\n")
 
-	// Auto-detect HTML if content type not explicitly set to text
-	contentType := notification.ContentType
-	if contentType == "" || contentType == "auto" {
-		contentType = detectContentType(notification.Body)
-	}
-
-	// Build message based on content type
-	if contentType == domain.ContentTypeHTML {
-		// Send multipart/alternative with both text and HTML
-		s.buildMultipartMessage(&builder, notification)
-	} else {
-		// Send plain text only
+	switch {
+	case notification.HTMLBody != "":
+		// Caller provided distinct plain-text and HTML versions: send multipart/alternative
+		// using Body verbatim as text/plain and HTMLBody as text/html (no auto-strip).
+		s.buildMultipartMessage(&builder, notification.Body, notification.HTMLBody)
+	case isHTMLContent(notification):
+		// Legacy path (deprecated): Body itself is HTML. Auto-derive a plain-text fallback.
+		s.buildMultipartMessage(&builder, htmlToPlainText(notification.Body), notification.Body)
+	default:
 		builder.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
 		builder.WriteString("\r\n")
 		builder.WriteString(notification.Body)
@@ -165,31 +162,38 @@ func (s *SMTPNotifier) buildMessage(notification *domain.Notification) string {
 	return builder.String()
 }
 
-// buildMultipartMessage builds a multipart/alternative email with both text and HTML versions
-func (s *SMTPNotifier) buildMultipartMessage(builder *strings.Builder, notification *domain.Notification) {
-	// Generate a unique boundary
+// isHTMLContent reports whether the notification's Body should be treated as HTML
+// under the legacy content_type path.
+func isHTMLContent(notification *domain.Notification) bool {
+	contentType := notification.ContentType
+	if contentType == "" || contentType == "auto" {
+		contentType = detectContentType(notification.Body)
+	}
+	return contentType == domain.ContentTypeHTML
+}
+
+// buildMultipartMessage builds a multipart/alternative email with the given plain-text
+// and HTML parts.
+func (s *SMTPNotifier) buildMultipartMessage(builder *strings.Builder, plainText, htmlBody string) {
 	boundary := generateBoundary()
 
 	builder.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary))
 	builder.WriteString("\r\n")
 
-	// Plain text version (auto-generated from HTML)
 	builder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
 	builder.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
 	builder.WriteString("Content-Transfer-Encoding: 7bit\r\n")
 	builder.WriteString("\r\n")
-	builder.WriteString(htmlToPlainText(notification.Body))
+	builder.WriteString(plainText)
 	builder.WriteString("\r\n\r\n")
 
-	// HTML version
 	builder.WriteString(fmt.Sprintf("--%s\r\n", boundary))
 	builder.WriteString("Content-Type: text/html; charset=UTF-8\r\n")
 	builder.WriteString("Content-Transfer-Encoding: 7bit\r\n")
 	builder.WriteString("\r\n")
-	builder.WriteString(notification.Body)
+	builder.WriteString(htmlBody)
 	builder.WriteString("\r\n\r\n")
 
-	// End boundary
 	builder.WriteString(fmt.Sprintf("--%s--\r\n", boundary))
 }
 
