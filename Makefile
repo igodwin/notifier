@@ -1,8 +1,8 @@
-.PHONY: proto proto-gen proto-clean deps build build-dev run run-grpc run-rest test lint fmt vet check docker-build docker-build-dev docker-buildx-setup docker-buildx docker-run clean help
+.PHONY: proto proto-gen proto-clean deps build build-dev run run-grpc run-rest test lint fmt vet check docker-build docker-build-dev docker-buildx-setup docker-run clean help
 
 # Variables
 REGISTRY ?=
-IMAGE ?=
+IMAGE ?= notifier
 PLATFORMS ?= linux/amd64,linux/arm64
 PROTO_DIR=api/grpc
 PROTO_FILE=$(PROTO_DIR)/notifier.proto
@@ -142,18 +142,37 @@ qa: fmt vet lint test
 	@echo "All quality checks passed!"
 
 # Build Docker image (production - optimized)
+# When REGISTRY is set, builds a multi-arch image and pushes
+# $(REGISTRY)/$(IMAGE):$(VERSION) and :latest.
+# Otherwise builds a single-arch local image tagged $(IMAGE):latest.
 docker-build:
-	@echo "Building Docker image (production - optimized)..."
 	@echo "Version: $(VERSION)"
 	@echo "Git Commit: $(GIT_COMMIT)"
 	@echo "Build Time: $(BUILD_TIME)"
+ifeq ($(strip $(REGISTRY)),)
+	@echo "Building single-arch local Docker image..."
 	docker build \
 		--build-arg VERSION=$(VERSION) \
 		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
 		--build-arg BUILD_TIME=$(BUILD_TIME) \
 		--build-arg BUILD_FLAGS="-s -w" \
-		-t notifier:latest .
+		-t $(IMAGE):latest .
 	@echo "Docker image built successfully (production - optimized)"
+else
+	@$(MAKE) docker-buildx-setup
+	@echo "Building multi-arch image ($(PLATFORMS)) and pushing to $(REGISTRY)/$(IMAGE):$(VERSION)..."
+	docker buildx build \
+		--platform $(PLATFORMS) \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		--build-arg BUILD_FLAGS="-s -w" \
+		--provenance=false \
+		--tag $(REGISTRY)/$(IMAGE):$(VERSION) \
+		--tag $(REGISTRY)/$(IMAGE):latest \
+		--push .
+	@echo "Multi-arch image pushed successfully"
+endif
 
 # Build Docker image with debug symbols (development)
 docker-build-dev:
@@ -172,29 +191,10 @@ docker-build-dev:
 # Set up Docker buildx builder for multi-arch builds
 docker-buildx-setup:
 	@echo "Setting up Docker buildx builder..."
-	@docker buildx inspect multiarch > /dev/null 2>&1 || docker buildx create --name multiarch --use
+	@docker buildx inspect multiarch > /dev/null 2>&1 || docker buildx create --name multiarch --driver docker-container
+	@docker buildx use multiarch
 	@docker buildx inspect multiarch --bootstrap
 	@echo "Buildx builder ready"
-
-# Build and push multi-arch Docker image
-docker-buildx:
-ifndef IMAGE
-	$(error IMAGE is required. Usage: make docker-buildx IMAGE=registry.example.com/org/notifier VERSION=v0.1.0)
-endif
-	@echo "Building and pushing multi-arch Docker image..."
-	@echo "Version: $(VERSION)"
-	@echo "Platforms: $(PLATFORMS)"
-	@echo "Image: $(IMAGE):$(VERSION)"
-	docker buildx build \
-		--platform $(PLATFORMS) \
-		--build-arg VERSION=$(VERSION) \
-		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
-		--build-arg BUILD_TIME=$(BUILD_TIME) \
-		--build-arg BUILD_FLAGS="-s -w" \
-		--tag $(IMAGE):$(VERSION) \
-		--tag $(IMAGE):latest \
-		--push .
-	@echo "Multi-arch image pushed successfully"
 
 # Run Docker container
 docker-run:
@@ -242,13 +242,15 @@ help:
 	@echo "  deps             - Install Go dependencies"
 	@echo ""
 	@echo "Docker:"
-	@echo "  docker-build        - Build Docker image (single arch)"
+	@echo "  docker-build        - Build Docker image"
+	@echo "                        - default: single-arch local image"
+	@echo "                        - with REGISTRY set: multi-arch (amd64+arm64) build + push"
 	@echo "  docker-build-dev    - Build Docker image with debug symbols"
 	@echo "  docker-buildx-setup - Set up buildx builder for multi-arch"
-	@echo "  docker-buildx       - Build and push multi-arch image (amd64+arm64)"
 	@echo "  docker-run          - Run Docker container locally"
 	@echo ""
 	@echo "Variables:"
 	@echo "  VERSION    - Image version tag (default: dev)"
-	@echo "  IMAGE      - Full image name (required for buildx, e.g. registry.example.com/org/notifier)"
+	@echo "  REGISTRY   - Registry prefix for docker-build (e.g. registry.example.com/org)"
+	@echo "  IMAGE      - Image name (default: notifier)"
 	@echo "  PLATFORMS  - Build platforms (default: $(PLATFORMS))"

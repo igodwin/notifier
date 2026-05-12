@@ -369,10 +369,22 @@ protoc --go_out=. --go-grpc_out=. api/grpc/notifier.proto
 
 ### Docker
 
-**Build:**
+**Build (single-arch, local):**
 ```bash
-docker build -t notifier:latest .
+make docker-build
 ```
+
+**Build and push a multi-arch image (linux/amd64 + linux/arm64):**
+```bash
+# Pushes $REGISTRY/$IMAGE:$VERSION and :latest.
+# Requires Docker buildx (bundled with Docker Desktop; on Linux also run
+# `docker run --rm --privileged tonistiigi/binfmt --install all` once to
+# register the QEMU emulators).
+REGISTRY=registry.example.com/org VERSION=v0.1.3 make docker-build
+```
+
+Override `IMAGE` (default `notifier`) or `PLATFORMS` (default
+`linux/amd64,linux/arm64`) as needed.
 
 **Run:**
 ```bash
@@ -541,7 +553,7 @@ make lint           # Run golangci-lint
 make check          # Run fmt-check + vet + mod verify
 make qa             # Run all quality checks
 make proto-gen      # Generate protobuf code
-make docker-build   # Build Docker image
+make docker-build   # Build Docker image (multi-arch + push when DOCKER_REGISTRY is set)
 make clean          # Clean build artifacts
 make help           # Show all available targets
 ```
